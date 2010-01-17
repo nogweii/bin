@@ -1,0 +1,2 @@
+#!/bin/zsh
+canto --url ${1/feed:/http:}

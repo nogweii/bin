@@ -1,0 +1,25 @@
+#!/bin/sh
+
+# Check the status of the network connection.
+# Thanks to grnmtn on Freenode for this script!
+#
+# *0* return value indicates the network connection is active. No guarantees on
+# the quality of the connection, or if the Internet works. We just have a cable
+# in our ass, and it's on.
+#
+# non-zero return values indicate there was an error somewhere in this script.
+# Any errors should be considered a notification that the network is down, or
+# otherwise inaccessible. Therefore, don't download anything, since you'll just
+# get a bunch of errors.
+#
+# ------------
+#
+# How we do this:
+#  1) Find the IP of the gateway (arp)
+#  2) Isolate the gateway's IP (awk)
+#  3) Remove the extra human text that machines don't need (grep -v)
+#  4) Send a single packet to that IP. (ping)
+#  5) Since ping doesn't have a true quiet option, move the output to /dev/null
+
+
+ping -c 1 `arp|awk {'print $1'}|grep -v Add` &>/dev/null

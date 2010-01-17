@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# A simple script that echoes each argument passed to it into a file (/tmp/log_args.log) for application discovery goodness :D
+
+echo "------- $0 [$(date)]" >> /tmp/log_args.log
+echo "@: $@" >> /tmp/log_args.log
+i=1
+while [ $# -gt 0 ] ; do
+	echo "$i: $1" >> /tmp/log_args.log
+	shift
+	i=$(($i + 1))
+done
+

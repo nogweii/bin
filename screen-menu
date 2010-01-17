@@ -1,0 +1,13 @@
+#!/bin/zsh
+
+# Convert the list of screens into something dialog can handle
+screens=($(screen -ls | head -n-2 | tail -n+2 | tr -d ' \t' | awk -F'(' '{ print $1, "("$2 }' | sort | tr '\n' ' '))
+tf=`mktemp` # Temporary file to store the user's choice
+dialog --menu "Please select a screen below: " 0 0 0 $screens[@] 2>$tf
+
+# Store the id momentarily
+screen_id=$(head -n1 $tf)
+rm $tf # So we can delete the temporary file
+
+# And now, let's start screen with  the chosen screen
+exec screen -R $screen_id

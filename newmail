@@ -1,0 +1,4 @@
+#!/bin/sh
+
+fdm poll
+#echo "Yahoo: $(fetchyahoo --quiet --statusonly)"

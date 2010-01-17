@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# Starts UrbanTerror, the scrolling display of ALPHA members, and TeamSpeak
+# all at once
+
+xalf -m tstart 
+#cd $HOME/Code/Scripts
+#ruby urt_alpha_members.rb &
+cd $HOME # Just to make sure UrT runs properly
+urbanterror

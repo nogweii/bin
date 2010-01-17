@@ -1,0 +1,11 @@
+#!/bin/zsh
+
+# A random cow-file in /usr/share/cows/ is chosen to speak (or think) a fortune
+
+cows=($(echo /usr/share/cows/*.cow | sed "s@/usr/share/cows/@@g" | sed "s/\.cow//g"))
+cowcmds=(cowsay cowthink)
+#tounges=(U " ")
+#tounge_formats=("  " "%s " " %s" "%s%s")
+eyes=("oo" "o0" "0o" "><" ">>" "<<" "^^" "==" "\$\$" ".." ",," "--")
+#-T"$(printf $tounge_formats[$RANDOM%$#tounge_formats+1] $tounges[$RANDOM%$#tounges+1])"
+fortune | sed "s/^\s*$//g" | $cowcmds[$RANDOM%$#cowcmds+1] -f $cows[$RANDOM%$#cows+1] -W $(($COLUMNS-3)) -e "${eyes[$RANDOM%$#eyes+1]}" 

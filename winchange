@@ -1,0 +1,51 @@
+#!/usr/bin/ruby
+# Changes to the next/previous n'th window.
+# Depends on `xdotool' and `wmctrl'. Both tools require that the window manager
+# is EWMH compliant.
+#
+# (C) 2009 Colin Shea
+# Released under the MIT license
+
+if ARGV[0].nil? or !(ARGV[0].match(/^-?[0-9]+$/))
+    puts "USAGE: #{File.basename($0)} NUM    # Where NUM is any number"
+    puts ""
+    puts "Changes to the next/previous NUM window. Depends on \`xdotool\' & \`wmctrl\'"
+    puts "(C) 2009 Colin Shea. Released under the MIT license"
+    exit 2
+end
+
+# Get the currently focused window
+current_window = `xdotool getwindowfocus`.strip
+# Get all windows.
+windows = `wmctrl -l`.split("\n").map {|line| line.split(" ")[0].to_i(16).to_s }
+
+# Find the focused window's position in the list
+index = windows.find_index(current_window)
+if index == nil
+    new_index = 0 # All windows are closed/minimized.
+else
+    new_index = index + ARGV[0].to_i # Get the next one
+end
+
+# In case list.length == 3, but NUM == 8,9,10 or some really large number.
+# We wrap the number, to avoid weird null index related errors/glitches
+while new_index >= windows.length
+    new_index -= windows.length
+end
+# Same as above, but for negative numbers.
+while new_index <= windows.length && new_index < 0
+    new_index += windows.length
+end
+
+unless new_index == index
+    next_window_id = windows[new_index].strip
+    puts windows.inspect, "      #{index}    =>    #{new_index}", "  #{current_window} => #{next_window_id}"
+    # This seems excessive, but I've found it's the only way.
+    if current_window && index
+        system("xdotool windowunmap    #{current_window}")
+    end
+    system("xdotool windowmap      #{next_window_id}")
+    system("xdotool windowraise    #{next_window_id}")
+    system("xdotool windowfocus    #{next_window_id}")
+    system("xdotool windowactivate #{next_window_id}")
+end

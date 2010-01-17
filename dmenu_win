@@ -1,0 +1,47 @@
+#!/bin/bash
+
+append_path=0
+path_delimiter='  '
+
+hostname=`hostname`
+
+# find active windows
+wins=`wmctrl -l`
+
+# filter out sticky windows
+filteredwins=`echo "$wins" | grep -v '0x[0-9a-f]* *-1'`
+
+# perform sustitutions
+#filteredwins=`echo "$filteredwins" | sed 's/- File Manager/- Thunar/'`
+
+# filter out other window information
+wintitles=`echo "$filteredwins" | sed "s/.*\(${hostname}\|N\/A\) \(.*\)/\2/"`
+
+# add path executables if applicable
+if [ "$append_path" == "1" ]; then
+    commands=`echo "$wintitles"; dmenu_path | sed "s/^/$path_delimiter/"`
+else
+    commands=$wintitles
+fi
+
+# show dmenu
+selectedwin=`echo "$commands" | dmenu -l 25 -w 400 -x 400 -y 480 -rs -c -ni -i -xs`
+
+if [ "$?" == "0" ]; then
+
+    # strip path delimiter
+    if [ "$append_path" == "1" ]; then
+        selectedwin=${selectedwin#$path_delimiter}
+    fi
+
+    # undo substitutions
+    #selectedwin=`echo "$selectedwin" | sed 's/- Thunar/- File Manager/'`
+
+    # activate selected window
+    wmctrl -F -a "$selectedwin"
+
+    # if no window matches, launch the program selected
+    if [ "$?" == "1" -a "$append_path" == "1" ]; then
+        exec $selectedwin
+    fi
+fi

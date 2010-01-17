@@ -1,0 +1,104 @@
+#!/bin/bash  
+# A nifty Jamendo interface for the CLI. You will need to have MDP, mpc and w3m installed for this script to work. 
+# By  Emmanuele Massimi <finferflu@gmail.com>
+
+
+clear
+
+# title	
+echo " "
+echo -e '\E[1;34m'"  Welcome to the Jamendo CLI Tag Browser\033[0m"
+echo -e '\E[1;34m'"================================================================================\033[0m"
+
+# begin loop
+while true; do
+
+echo " "
+echo -e '\E[1;33m'"\t Enter the tags you wish to search for, use a space to separate them\033[0m \n \t \033[1;37mOr type \033[1;34mt\033[1;37m to see a list of the most popular tags, \033[1;31mq\033[1;37m to quit:\033[0m"
+echo -n -e '\E[33m'"\t    > \033[0m"
+
+# get the tag variable to be inserted in the URL
+read tag
+
+echo " "
+
+# exit with q and enter
+if [ "$tag" = "" ]; then
+	exit
+else
+	if [ "$tag" = "q" ]; then
+		exit
+	fi
+fi
+
+
+# if the user types "t", then display the list of the 100 most popular tags
+if [ "$tag" = "t" ]; then
+	w3m -no-cookie -dump http://www.jamendo.com/get/tag/name/tag/name/plain/?n=100 | sed -e ":a" -e "$!N;s/\n/ /;ta" -e "P;D"
+
+# else, we go on with the next question: how many result items?
+else
+	echo -e '\E[1;33m'"\t Enter the number of items you wish to see \n \t \033[1;37mType \033[1;34mall\033[1;37m to get all items; default is 25\033[0m"
+	echo -n -e '\E[33m'"\t   > \033[0m"
+
+	# get the items variable to be inserted in the URL
+	read n
+
+	# if the user presses enter without entering a value, then we default to 25
+	if [ "$n" = "" ]; then
+	n=25
+	fi
+	
+	# store the list in a temporary file
+	w3m -no-cookie -dump http://www.jamendo.com/get/album/name/tag/desc1/plain/${tag// /+}/?n=$n > /tmp/jamdump; 
+
+	echo " "
+
+	# display a reformatted list with colourised line numbers for easy selection ;)
+	sed = /tmp/jamdump | sed 'N;s/\n/\t/' | \
+
+	awk -v col="\033[1;33m" -v endcol="\033[0m \t" '{
+		printf(col $1 endcol)
+		for (i=2; i<=NF; i++)
+		printf("%s ",$i)
+		printf("\n") 
+	} ' 
+
+
+
+	echo " " 
+
+	# ask for the album number
+	echo -e '\E[1;33m'"\t Enter the number of the album you wish to listen to:\033[0m"
+	echo -n -e '\E[33m'"\t    > \033[0m"
+	
+	# get the number variable to be inserted in the URL
+	read number
+
+	# if the user just presses enter, quit
+	if [ "$number" = "" ]; then
+		exit
+	fi
+	
+	# play album via mpc
+	mpc clear; mpc add `w3m -no-cookie -dump \`w3m -no-cookie -dump http://www.jamendo.com/get/album/name/tag/audio/plain/${tag// /+}/?n=$n | sed -n "$number"p\``; mpc play
+	
+	clear
+	echo " "
+	# display the album title, album URL, and album track list ;)
+	echo -e '\E[1;32m'" You are listening to \033[1;34m`w3m -no-cookie -dump http://www.jamendo.com/get/album/name/tag/desc1/plain/${tag// /+}/?n=$n | sed -n "$number"p`\033[1;32m `w3m -no-cookie -dump http://www.jamendo.com/get/album/name/tag/page/plain/${tag// /+}/?n=$n | sed -n "$number"p`\033[0m"
+echo " "
+
+# get the album id number to be inserted in the new URL
+albumid="`w3m -no-cookie -dump http://www.jamendo.com/get/album/name/tag/page/plain/${tag// /+}/?n=$n | sed -n "$number"p | sed -e 's/\([A-Za-z]\)//g' -e 's/\.//g' -e 's/\///g' -e 's/://g'`"
+
+echo -e '\E[37m'"`w3m -no-cookie -dump http://www.jamendo.com/get/track/list/album/title/plain/?ids=$albumid | sed -e 's/$/\n/g' -e 's/^/\t- /g'`\033[0m"
+echo " "
+echo " "
+fi
+
+done
+# start all over again :P
+
+# remove the temporary file
+rm /tmp/jamdump

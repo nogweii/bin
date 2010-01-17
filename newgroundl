@@ -1,0 +1,25 @@
+#!/bin/sh
+
+if [ -z "$1" ] ; then
+    echo "Need a audio portal ID!"
+    exit 1
+fi
+
+filename="/tmp/newgrounds_$1"
+
+echo "Downloading newgrouds song #$1..."
+wget "http://www.newgrounds.com/audio/download/$1" -qO- | pv -w80 > $filename
+
+# Get the information
+ title=`id3info $filename | grep TIT2 | cut -d':' -f2- | sed 's/\s(ID: .*$//;s/^\s*//;s/\s*$//'`
+author=`id3info $filename | grep TPE1 | cut -d':' -f2- | sed 's/^\s*//;s/\s*$//'`
+
+# Tell the user about this song
+echo "Downloaded '$title' by '$author'"
+
+# Strip all non-alphanumeric characters, for the filename
+ ftitle=`echo $title  | tr -c -d '[:alnum:]'`
+fauthor=`echo $author | tr -c -d '[:alnum:]'`
+
+# Move it, with the proper name.
+mv $filename "./`echo $1 _ $ftitle __ $fauthor.mp3 | tr -d ' '`"

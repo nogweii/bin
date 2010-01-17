@@ -1,0 +1,22 @@
+#!/usr/bin/ruby
+
+# == Description
+# commify - Converts a plain number into it's commified version.
+# == Usage
+#	commify 1234
+#	echo 1234 | commify
+
+
+# Commify (or commafy, as my badly spelling version would put it) a number
+class Integer
+	def commify
+		self.to_s.reverse.gsub(/(\d\d\d)(?=\d)(?!\d*\.)/,'\1,').reverse
+	end
+end
+
+n = (ARGV[0] or $stdin.gets)
+if ["-h", "--help", "-help"].include? n
+	require 'rdoc/usage'
+	RDoc.usage
+end
+puts n.to_i.commify

@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# Given the first argument, changes the desktop by that much (pass a negative
+# to go left).
+#
+# Depends on: bc, xdotool
+
+numdesks=`echo "$(xdotool get_num_desktops)-1" | bc`
+curdesk=`xdotool get_desktop`
+
+newdesk=`echo "${curdesk}+${1}" | bc`
+
+if [ $newdesk -gt $numdesks ] ; then
+	newdesk=0
+fi
+
+if [ $newdesk -lt 0 ] ; then
+	newdesk=$numdesks
+fi
+
+xdotool set_desktop $newdesk

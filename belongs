@@ -1,0 +1,24 @@
+#!/bin/zsh
+
+# Requires root privileges
+# Gives a directory to another user, fixing privileges along the way.
+# Any file previously executable is no longer. It's not a *horrible* side
+# effect, but can be quite annoying :)
+
+if [ "$(id -u)" != 0 ] ; then
+	echo "Need root permissions"
+	exit 1
+fi
+
+USER="colin"
+
+if [ -d $1 ] ; then
+	cd $1/..
+	chown -R $USER\:users $1
+	chown -R $USER\:users $1/* # Just something that I find needs doing
+	chmod -R 755 $1
+	chmod -R 755 $1/*
+	find $1 -type f -perm +0111 -exec chmod -x {} \;
+else
+	echo "'$1' is not a valid directory"
+fi

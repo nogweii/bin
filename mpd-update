@@ -1,0 +1,14 @@
+#!/bin/sh
+
+echo 'Clearing & randomly shuffling all songs in the library...'
+
+# Run this after calling `mpd --create-db`
+(
+   mpc clear                        # clear the playlist
+   mpc random off                   # turn off random
+   mpc listall | sort -R | mpc add  # add all songs, randomly.
+   mpc play                         # start playing those songs!
+) &> /dev/null
+
+# Show the information for the currently playing song to the user.
+mpc

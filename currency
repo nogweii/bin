@@ -1,0 +1,72 @@
+#!/usr/bin/ruby
+
+require 'soap/wsdlDriver'
+require 'pp'
+
+wsdl = 'http://xurrency.com/api.wsdl'
+driver = SOAP::WSDLDriverFactory.new(wsdl).create_rpc_driver
+
+verbose = ARGV.delete "--verbose"
+DEFAULT_AMOUNT = 1
+# We presume the existing 2 parameters are valid currencies.
+if ARGV.length == 2
+	ARGV.unshift(DEFAULT_AMOUNT)
+end
+
+unless ARGV.length == 3
+	puts <<-FOO
+Usage:
+#{File.basename($0)} [--verbose] [count] CURRENCY CURRENCY
+If count is ommitted, #{DEFAULT_AMOUNT} will be used. Please make sure the
+parameters are in the correct order. (Use --verbose to see a human-firendly
+version)
+
+Valid currency codes are (regardless of case):
+FOO
+#driver.getCurrencies().each do |code|
+#	puts "#{code} => #{driver.getName(code)}"
+#end
+puts File.read(File.join(ENV['HOME'], '.currencies'))
+	exit
+end
+
+amount = driver.getValue(ARGV[0], ARGV[1].downcase, ARGV[2].downcase)
+if verbose
+	puts "#{ARGV[0]} #{ARGV[1].upcase} => #{amount} #{ARGV[2].upcase}"
+else
+	puts amount
+end
+
+__END__
+# The script below is the older version that relied on Hpricot + xurrency's feeds
+
+verbose = ARGV.delete "--verbose"
+DEFAULT_AMOUNT = 1
+# We presume the existing 2 parameters are valid currencies.
+if ARGV.length == 2
+	ARGV.unshift(DEFAULT_AMOUNT)
+end
+
+unless ARGV.length == 3
+	puts <<-FOO
+Usage:
+#{File.basename($0)} [--verbose] [count] CURRENCY CURRENCY
+If count is ommitted, #{DEFAULT_AMOUNT} will be used
+FOO
+	exit
+end
+
+require 'rubygems'
+require 'open-uri'
+require 'hpricot'
+
+url = "http://xurrency.com/#{ARGV.join('/')}/feed"
+p url
+
+amount = (Hpricot(open(url).read)/'dc:value').inner_html
+
+if verbose
+	puts "#{ARGV[0]} #{ARGV[1].upcase} => #{amount} #{ARGV[2].upcase}"
+else
+	puts amount
+end

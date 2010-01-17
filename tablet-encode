@@ -1,0 +1,734 @@
+#!/usr/bin/perl -w
+#
+# Encode a video into a format suitable for a Nokia Internet Tablet.
+# (c) Andrew Flegg 2006. Released under the Artistic Licence.
+# v2.19                  http://mediautils.garage.maemo.org/
+
+use strict;
+use warnings;
+use Getopt::Long;
+use File::Basename;
+use List::Util qw(max);
+use POSIX;
+
+use vars qw(%PRESET @PRESET_ORDER $CONFIGURE_FILE);
+# -- These can be overridden in .tablet-encode.conf...
+#
+my @cropLimit     = (0.15, 0.2);
+my $idealRatio    = 800/480; # i.e. 15/9
+my $maxFps        = 30;
+my $defaultPreset = 'average';
+my @defaultArgs   = ();
+
+# ...and this can be added to.
+%PRESET = (
+    smallest => { abitrate => 32, vbitrate => 80, width => 240, fps => 15 },
+    small    => { abitrate => 96, vbitrate => 150, width => 240, fps => 15 },
+    average  => { abitrate => 128, vbitrate => 350, width => 320 },
+    good     => { abitrate => 160, vbitrate => 600, width => 352 },
+    best     => { abitrate => 192, vbitrate => 768, width => 400, height => 240 },
+    mplayer  => { abitrate => 192, vbitrate => 1200, width => 400, height => 240 },
+);
+$CONFIGURE_FILE = "$ENV{HOME}/.tablet-encode.conf";
+
+our %options = ();
+Getopt::Long::Configure("bundling");
+GetOptions(\%options, "help|?|h",
+                      "preset|p=s",
+                      "original-aspect|o",
+                      "two-pass|2",
+                      "index|i",
+                      "770|7",
+                      "copy-audio|c",
+                      "sample|s:i",
+                      "list|l",
+                      "episodes|e",
+                      "gui|g",
+                      "mencoder|m=s@",
+                      "quiet|q",
+);
+
+if (-f $CONFIGURE_FILE) {
+  my $conf = '';
+  open(IN, "<$CONFIGURE_FILE") or die "Unable to open $CONFIGURE_FILE: $!\n";
+  while(<IN>) { $conf .= $_; }
+  close(IN);
+  
+  eval($conf) or die "Error in configuration file: $@\n";
+}
+
+$options{"preset"} ||= $defaultPreset;
+
+my $syntax = <<EOM;
+Syntax:
+    tablet-encode [options] <input> <destination>
+    tablet-encode [options] <input1> [<input2>...] <directory>
+    tablet-encode [options] --list <input1> [<input2> ...]
+EOM
+
+@PRESET_ORDER = sort { $PRESET{$a}->{vbitrate} <=> $PRESET{$b}->{vbitrate} } keys(%PRESET);
+my $guiAvailable = eval{require Gtk2; require Gtk2::Helper };
+my $needHelp     = ($options{"help"} or (@ARGV < 2 and not $options{'list'}));
+$needHelp = 0 if $options{"preset"} eq 'list';
+
+die <<EOM if ($needHelp and !$guiAvailable) or $options{"help"};
+tablet-encode                              (c) Andrew Flegg 2006, 2008
+~~~~~~~~~~~~~                              Released under the Artistic Licence.
+$syntax
+Options:
+    -h, --help              This message
+    -g, --gui               Open a graphical interface to tablet-encode
+    -q, --quiet             Be vewwy vewwy quiet
+    -p, --preset=PRESET     Preset to use. Use --preset=list to see them all.
+    -s, --sample[=SECS]     Produce a SECS second sample encoding. Default: 30.
+    -i, --index             Generate avi file index
+    -7, --770               Use a different FOURCC for better 770 compatibility.
+    -o, --original-aspect   Disable cropping image to better fit screen
+    -c, --copy-audio        Copy the existing audio track
+    -2, --two-pass          Encode in two passes for better quality
+    -m, --mencoder=ARGn     Pass ARGn to mencoder. Can occur multiple times.
+    -e, --episodes          When auto-detecting DVD track, rip all episodes.
+    -l, --list              Specify that the arguments are a list of files to
+                            encode. Output file is input suffixed with preset.
+
+Please report bugs to <andrew\@bleb.org>. Thanks.
+
+EOM
+
+if ($options{"preset"} eq 'list') {
+  my $detail = '';
+  foreach my $p (@PRESET_ORDER) {
+    my $preset = $PRESET{$p};
+    $detail .= '  '.$p.(' ' x (16 - length($p))).' - '.
+               $preset->{width}.'x'.
+               int($preset->{height} || $preset->{width} / $idealRatio).' @ '.
+               $preset->{vbitrate}.'kbps video, '.
+               $preset->{abitrate}.'kbps audio ('.
+               ($preset->{fps} || $maxFps).' fps)'.
+               "\n";
+  }
+  die "Available presets:\n$detail\n";
+}
+
+die "mencoder is not installed or doesn't support lavc encoder\n" unless (&mencoderSupports('oac')->{'lavc'} || &mencoderSupports('oac')->{'mp3lame'}) && &mencoderSupports('ovc')->{'lavc'};
+
+# -- Open the GUI if appropriate...
+#
+if ($guiAvailable and ($options{'gui'} or $needHelp)) {
+  Gtk2->init;
+  &openGui() if $needHelp;
+}
+die "GUI option not available. Check Gtk2-Perl is installed.\n" if !$guiAvailable and $options{'gui'};
+
+# -- Create the conversion queue...
+#
+my $preset      = $PRESET{$options{"preset"}} or die "Unknown preset.\n";
+my @conversions = ();
+if (-d $ARGV[-1]) {
+  my $target = pop @ARGV;
+  foreach my $f (@ARGV) {
+    push @conversions, &movieInfo({ input  => [ $f ],
+                                    output => $target.'/'.(fileparse($f))[0].'.avi' });
+  }
+
+} elsif ($options{'list'}) {
+  foreach my $f (@ARGV) {
+    push @conversions, &movieInfo({ input  => [ $f ],
+                                    output => (fileparse($f))[0].'.'.$options{"preset"}.'.avi' });
+  }
+
+} elsif (@ARGV == 2) {
+  push @conversions, &movieInfo({ input  => [ $ARGV[0] ],
+                                  output => $ARGV[1] });
+
+} else {
+  die $syntax;
+}
+
+# -- Run the conversion for all the appropriate files...
+#
+warn "WARNING: Preset may be too high for Nokia 770.\n\n" if $options{'770'} and $preset->{vbitrate} > 600;
+my $progress = $options{'gui'} ? &openProgress(1) : undef;
+if ($progress) {
+  Gtk2->main;
+} else {
+  foreach my $info (@conversions) {
+    &convert($info, $preset,
+             (!$guiAvailable and $info == $conversions[-1]));
+  }
+}
+
+exit;
+
+
+# =======================================================================
+# convert - transcode a file
+#
+sub convert {
+  my ($info, $preset, $exec) = @_;
+
+  # -- Various options etc...
+  #
+  my $twoPass   = defined($options{"two-pass"});
+  my $maxFps    = $preset->{fps} || $maxFps;
+  my $optimise  = 1 unless defined($options{"original-aspect"});
+
+  # -- Now build up the command line...
+  #
+  my @params = ('-o', $twoPass ? "TWO-PASS-FILE" : $info->{output}, '-srate', 44100);
+  push @params, '-aid', $info->{audioid} if $info->{audioid};
+  push @params, '-passlogfile', $info->{output}.'.two-pass-log' if $twoPass;
+
+  # -- Downmix to mono if low audio rate...
+  #
+  my $af = 'volnorm';
+  if ($preset->{abitrate} < 64) {
+    push @params, '-channels', 1;
+    $af .= ',channels=1';
+  }
+
+  # -- Audio/video encoding...
+  #
+  if ($options{'copy-audio'} or (($info->{aformat} || '') eq '85') && (($info->{abitrate} || 0) <= $preset->{abitrate})) {
+    push @params, '-oac', 'copy';
+    $af = '';
+    
+  } elsif (&mencoderSupports('oac')->{'mp3lame'}) {
+    push @params, '-oac', 'mp3lame',
+                  '-lameopts', 'vbr=0:br='.$preset->{abitrate}.
+                  ($preset->{abitrate} < 64 ? ':mode=3' : '');
+  } else {
+    push @params, '-oac', 'lavc', '-lavcopts', 'acodec=mp3:abitrate='.$preset->{abitrate};
+  }
+  push @params, '-af', $af if $af;
+
+
+  # -- Work out the framerate...
+  #
+  my $ofps   = $info->{framerate} || 0;
+  $ofps /= 2 while $ofps > $maxFps;
+  push @params, '-ofps', $ofps if $ofps;
+
+  # -- Handle anamorphic DVDs...
+  #
+  my $anamorphic = 1;
+  if ($info->{aspect} == 2) {
+    $anamorphic = 4/3;
+  } elsif ($info->{aspect} == 3) {
+    $anamorphic = 16/9;
+  } elsif ($info->{aspect} == 4) {
+    $anamorphic = 2.11;
+  }
+
+  $info->{width} *= $info->{height} * $anamorphic / $info->{width} if $anamorphic != 1;
+
+  # -- Optimise for target screen...
+  #
+  my $aspect = $info->{width} / $info->{height};
+  my $scale  = $preset->{width} / $info->{width};
+  $scale = $preset->{height} / $info->{height} if ($aspect < $idealRatio) and $preset->{height};
+
+  my ($w, $h) = (&nearest($info->{width} * $scale),
+                 &nearest($info->{height} * $scale));
+  my ($targetWidth, $targetHeight) = ($preset->{width},
+                                      $preset->{height} || $preset->{width} / $aspect);
+                 
+  # Don't upscale...
+  if ($scale > 1) {
+    ($w, $h) = (&nearest($info->{width}), &nearest($info->{height}));
+    print "Changing target width/height to $w x $h to prevent upscaling of $scale.\n" unless $options{"quiet"};
+    ($targetWidth, $targetHeight) = ($w, $h);
+    $scale = 1;
+  }
+                 
+  # Work out scaling/cropping factors...
+  if ($optimise) {
+    my ($cropWidth, $cropHeight);
+    my $ratio  = abs($aspect - $idealRatio) / $aspect;
+    if ($aspect > $idealRatio) {
+      # Too wide...
+      print "Width needs trimming by $ratio from $w x $h\n" unless $options{"quiet"};
+      $ratio = $cropLimit[0] if $ratio > $cropLimit[0];
+
+      my $resultRatio  = $info->{width} * (1 - $ratio) / $info->{height};
+      my $targetHeight = &nearest( $targetWidth / $resultRatio, 16 );
+      my $scale   = $targetHeight / $info->{height};
+      ($w, $h) = (&nearest($info->{width} * (1 - $ratio) * $scale, 16), $targetHeight);
+
+      ($cropWidth, $cropHeight) = (int($w / $scale), int($h / $scale));
+
+    } elsif (($aspect < $idealRatio) and $preset->{height}) {
+      # Too tall, but we've got a maximum height...
+      print "Height needs trimming by $ratio from $w x $h to ".$preset->{height}."\n" unless $options{"quiet"};
+      $ratio = $cropLimit[1] if $ratio > $cropLimit[1];
+
+      my $resultRatio  = $info->{width} / ($info->{height} * (1 - $ratio));
+      my $targetWidth = &nearest( $targetHeight * $resultRatio, 16 );
+      my $scale   = $targetWidth / $info->{width};
+      ($w, $h) = ($targetWidth, &nearest($info->{height} * (1 - $ratio) * $scale, 16));
+
+      ($cropWidth, $cropHeight) = (int($w / $scale), int($h / $scale));
+
+    } elsif ($aspect < $idealRatio) {
+      # Too tall...
+      print "Height needs trimming by $ratio from $w x $h\n" unless $options{"quiet"};
+      $ratio = $cropLimit[1] if $ratio > $cropLimit[1];
+      ($w, $h) = (&nearest($info->{width} * $scale, 16), &nearest($info->{height} * $scale, 16));
+
+      $h = &nearest($h * (1 - $ratio), 16);
+      ($cropWidth, $cropHeight) = (int($w / $scale), int($h / $scale));
+    }
+
+    push @params, '-vf-add', "crop=$cropWidth:$cropHeight" if $cropWidth and $cropHeight;
+  }
+
+  push @params, '-vf-add', "scale=$w:$h";
+  push @params, '-vf-add', 'unsharp=c4x4:0.3:l5x5:0.5';
+
+  # -- Work out the video bitrate...
+  #
+  my $ovbitrate = $preset->{vbitrate};
+  if ($info->{format} =~ /^(DIVX|XVID|DX50|FMP4)$/i) {
+    my $equivbitrate = int( ($info->{vbitrate} / ($info->{framerate} * $info->{width} * $info->{height}))
+                            * ($ofps * $w * $h)
+                            * 1.1
+                           );
+    print "Equivalent bitrate + margin = $equivbitrate kbps\n" unless $options{"quiet"};
+    if ($equivbitrate <= $preset->{vbitrate}) {
+      if (&nearest($info->{width}, 16)  == $info->{width}   and
+          &nearest($info->{height}, 16) == $info->{height} and
+          $info->{width} <= $w and $info->{height} <= $h) {
+        print "Copying video stream.\n" unless $options{"quiet"};
+        $ovbitrate = undef;
+      } else {
+        print "Reducing output bitrate to match.\n" unless $options{"quiet"};
+        $ovbitrate = $equivbitrate if $equivbitrate;
+      }
+    }
+  }
+
+  # -- Insert video encoding options...
+  #
+  if ($ovbitrate) {
+    push @params, '-ovc', 'lavc',
+                  '-lavcopts', 'vcodec=mpeg4:vbitrate='.$ovbitrate.
+                  ":aspect=$w/$h".
+                  ':vrc_buf_size=450'.
+                  ':vrc_minrate='.int($ovbitrate / 2).
+                  ':vrc_maxrate='.max($ovbitrate * 1.25, 1000);
+  } else {
+    push @params, '-ovc', 'copy';
+  }
+
+  # -- Miscellaneous options...
+  #
+  push @params, @{ $info->{args} };
+  push @params, '-ffourcc', ($options{'770'} ? 'DIVX' : 'FMP4');
+  push @params, '-forceidx' if defined($options{"index"});
+  push @params, '-force-avi-aspect', $w/$h;
+  push @params, '-quiet' if $options{"quiet"};
+  push @params, '-endpos', ($options{"sample"} || 30) if defined($options{"sample"});
+
+  # -- Execute it...
+  #
+  push @params, @{ $info->{input} };
+  print '+++ '.$info->{input}->[-1]."\n" if $options{"gui"};
+  print "Invoking mencoder ".join(" ", @params)."...\n" unless $options{"quiet"};
+  close(STDERR);
+  if ($twoPass) {
+    my @localParams = map { my $a = $_; $a =~ s!TWO-PASS-FILE!/dev/null!;
+                            /^vcodec=/ ? "$a:vpass=1:turbo" : $a;
+                          } (@params);
+    system('mencoder', @localParams);
+    print "Pass 1 complete.\n" unless $options{"quiet"};
+
+    @localParams = map { my $a = $_; $a =~ s!TWO-PASS-FILE!$info->{output}!e;
+                            /^vcodec=/ ? "$a:vpass=2" : $a;
+                       } (@params);
+    print join(" ", @localParams);
+    if ($exec) {
+      exec('mencoder', @localParams);
+    } else {
+      system('mencoder', @localParams);
+      unlink($info->{output}.'.two-pass-log');
+    }
+
+  } elsif ($exec) {
+    exec('mencoder', @params);
+
+  } else {
+    system('mencoder', @params);
+  }
+}
+
+
+# =======================================================================
+# nearest - round to the nearest multiple
+#
+sub nearest() {
+  my ($num, $multiple) = @_;
+  $multiple ||= 16;
+  
+  return int(0.5 + $num / $multiple) * $multiple;
+}
+
+
+# =======================================================================
+# movieInfo - get movie info
+#
+sub movieInfo() {
+  my %info = %{$_[0]};
+  $info{args} = $options{'mencoder'} || \@defaultArgs;
+  my @result = ( \%info );
+  
+  # -- Fix output filename...
+  #
+  $info{output} =~ s/\bdvd\:/dvd/;
+
+  # -- Adapt to DVD directories and VDR/Freevo recordings...
+  #
+  my $file = $info{input}->[0];
+  $file =~ s!/+$!!;
+  $file =~ s!/VIDEO_TS/.*$!!;
+  if (-d "$file/VIDEO_TS") {
+    print "$file is a DVD.\n" unless $options{"quiet"};
+    push @{ $info{args} }, "-dvd-device", $file;
+    $info{input}->[0] = 'dvd:';
+
+  } elsif (-f "$file/info.vdr" or $file =~ s/(^|\/)info\.vdr$/$1/i) {
+    print "$file is a VDR recording.\n" unless $options{"quiet"};
+    @{ $info{input} } = sort grep { m!/\d{3}\.vdr$! } <$file/*.vdr>;
+    
+  } elsif ($file =~ /\.fxd$/) {
+    print "$file is Freevo meta-data.\n" unless $options{"quiet"};
+    my $data  = \%info;
+    my $count = 2;
+    open(IN, "<$file") or die "Unable to read $file: $!\n";
+    while(<IN>) {
+      if (/<(file|url)[^>]*>(.*?)<\//) {
+        my $type = $1;
+        push @result, $data if $data != \%info;
+        
+        my $url = $2;
+        $url = dirname($file).'/'.$url if $type eq 'file' && $url !~ /\//;
+        $data->{input} = [ $url ];
+        last unless $options{episodes};
+        
+        $data = { %info };
+        $data->{output} = $1.'-'.$count++.'.avi' if $data->{output} =~ /^(.*)\.\w+/;
+      }
+    }
+    close(IN);
+    #use Data::Dumper; print Dumper(\@result);
+  }
+  
+  # -- Find DVD info...
+  #
+  if ($info{input}->[0] =~ /^dvd:(\/\/)?$/) {
+    print "Getting DVD info...\n" unless $options{"quiet"};
+    my @dvd     = `mplayer -identify dvd:// -endpos 0 -vo null -ao null 2>&1`;
+    my %lengths = map {
+         /^ID_DVD_TITLE_(\d+)_LENGTH=(\d+)/;
+         $1 || '_', $2 || '0'
+      } @dvd;
+    my %audio   = map {
+         /^ID_AID_(\d+)_LANG=(\w+)/;
+         ($1 || '0', $2 || '_' )
+      } @dvd;
+    delete $lengths{'_'};
+    
+    my @lengthsInOrder = sort { $lengths{$b} <=> $lengths{$a} } keys(%lengths);
+    my $median = $#lengthsInOrder % 2 ? ($lengths{$lengthsInOrder[($#lengthsInOrder - 1)/2]} +
+                                         $lengths{$lengthsInOrder[1+($#lengthsInOrder-1)/2]}) / 2
+                                       : $lengths{$lengthsInOrder[$#lengthsInOrder / 2]};
+
+    my ($lang) = ($ENV{LANG} || '') =~ /^([a-z]+)/;
+    $info{audioid} = (grep { $audio{$_} eq $lang } keys(%audio))[0];
+
+    # Find tracks +-10% of median if --episodes specified, otherwise longest.
+    if ($options{'episodes'}) {
+      my $data  = \%info;
+      foreach my $track (@lengthsInOrder) {
+        if (abs($lengths{$track} - $median)/$median < 0.1) {
+          $data->{output} = $1.'-'.substr("0$track", -2).'.avi' if $data->{output} =~ /^(.*?)(-\d+)?\.\w+$/;
+          push @result, $data if $data != \%info;
+          print "Track $track is within 10% of $median\n" unless $options{'quiet'};
+          $data->{input} = [ "dvd://$track" ];
+          $data = { %info };
+        }
+      }
+
+    } else {   
+      my $longest = $lengthsInOrder[0];
+      print "Longest DVD track: $longest\nPreferred language: $lang\n" unless $options{"quiet"};
+      $info{input} = [ "dvd://$longest" ];
+    }
+  }
+
+  # -- Find media info...
+  #
+  if ($^O eq 'MSWin32') {
+    my $args  = join " ", map { "\"$_\"" } @{ $info{args} };
+    my $files = join " ", map { "\"$_\"" } @{ $info{input} };
+    $_ = `mplayer  $args -endpos 0 -vo null -ao null -identify $files 2>&1` .
+         `mencoder $args -endpos 0 -oac copy -ovc copy -o nul: $files 2>&1`;
+  } else {
+    my $args  = join " ", map { quotemeta($_) } @{ $info{args} };
+    my $files = join " ", map { quotemeta($_) } @{ $info{input} };
+    $_ = `mplayer  $args -endpos 0 -vo null -ao null -identify $files 2>&1` .
+         `mencoder $args -endpos 0 -oac copy -ovc copy -o /dev/null $files 2>&1`;
+  }
+
+  # -- Read info and populate details...
+  #
+  ($info{format},
+   $info{width}, $info{height},
+   $info{framerate},
+   $info{vbitrate},
+  ) = m{^VIDEO:\s*
+               \[?(\w+)\]?.*?
+               (\d+)x(\d+).*?
+               ([\d\.]+)\s*fps.*?
+               ([\d\.]+)\s*kbps
+  }mx;
+  
+  $info{width}     ||= $1 if /^VO:.*? => (\d+)x\d+/m;
+  $info{height}    ||= $1 if /^VO:.*? => \d+x(\d+)/m;
+  $info{framerate} ||= $1 if /^ID_VIDEO_FPS=([\d\.]+)/m;
+  $info{format}    ||= 'unknown';
+
+  $info{abitrate} = $1 / 1000 if /^ID_AUDIO_BITRATE=(\d+)/m;
+  $info{aformat}  = $1 if /^ID_AUDIO_FORMAT=(\w+)/m;
+  
+  $info{aspect}   = $1 if /^VIDEO:.*?\(aspect\s+(\d+)\)/m;
+  $info{aspect} ||= 1;
+
+  # If it's a Flash Video with a dodgy framerate, guess (badly)...
+  $info{framerate} = 28 if $info{format} =~ /^FLV/ and $info{framerate} >= 1000;
+  
+  # -- Copy info data to the other files, if any...
+  #
+  foreach my $result (@result) {
+    while(my ($k, $v) = each(%info)) {
+      $result->{$k} ||= $v;
+    }
+  }
+  #use Data::Dumper; print Dumper(\@result);
+  die "Unable to get movie info.\n" unless $info{width} and $info{height};
+  return @result;
+}
+
+
+# =======================================================================
+# mencodeSupports - return a hash of mencoder encoders
+#
+sub mencoderSupports {
+  my ($type) = @_;
+
+  my $list = `mencoder -\Q$type\E help 2>&1`;
+  my %data = ($list || '') =~ /^   (\w+)\s*-\s*(.*)$/mg;
+  return \%data;
+}
+
+
+# =======================================================================
+# openGui - open a GUI interface
+#
+sub openGui {
+  my $window = Gtk2::Window->new('toplevel');
+  $window->signal_connect(destroy => sub { Gtk2->main_quit; });
+  $window->set_title('tablet-encode');
+  $window->set_border_width(10);
+  $window->set_resizable(0);
+  $window->add(my $widgets = Gtk2::VBox->new);
+
+  $widgets->add(my $options = Gtk2::Table->new(3,3));
+  $options->set_col_spacings(5);
+  $options->set_row_spacings(5);
+  $options->attach_defaults(&right(Gtk2::Label->new('Input:')),
+                            0, 1, 0, 1);
+  $options->attach_defaults(my $inputText = Gtk2::Entry->new, 1, 2, 0, 1);
+  $options->attach_defaults(
+        my $openButton = Gtk2::Button->new_from_stock('gtk-open'),
+        2, 3, 0, 1
+  );
+  $openButton->signal_connect(clicked => sub {
+        my $result = &fileChooser('open');
+        $inputText->set_text($result) if $result;
+  });
+ 
+  $options->attach_defaults(&right(Gtk2::Label->new('Destination:')),
+                            0, 1, 1, 2);
+  $options->attach_defaults(my $outputText = Gtk2::Entry->new, 1, 2, 1, 2);
+  $options->attach_defaults(
+        my $saveButton = Gtk2::Button->new_from_stock('gtk-save'),
+        2, 3, 1, 2
+  );
+  $saveButton->signal_connect(clicked => sub {
+        my $result = &fileChooser('save');
+        $outputText->set_text($result) if $result;
+  });
+
+  $options->attach_defaults(&right(Gtk2::Label->new('Preset:')), 0, 1, 2, 3);
+  $options->attach_defaults(my $preset = Gtk2::ComboBox->new_text, 1, 3, 2, 3);
+  my $count = 0;
+  foreach my $p (@PRESET_ORDER) {
+    $preset->append_text($p);
+    $preset->set_active($count) if $p eq 'average';
+    $count++;
+  }
+
+  $widgets->add(my $buttonBar = Gtk2::HBox->new);
+  $buttonBar->add(my $cancel = Gtk2::Button->new_from_stock('gtk-quit'));
+  $cancel->signal_connect(clicked => sub { $window->destroy });
+
+  $buttonBar->add(my $button = Gtk2::Button->new('Convert'));
+  $button->signal_connect(clicked => sub {
+      eval {
+        my $progressId = &openProgress;
+        unless ($progressId) {
+          print "$$ - Starting conversion...\n";
+          &convert(&movieInfo({ input  => [ $inputText->get_text ],
+                                output => $outputText->get_text }),
+                              $PRESET{$preset->get_active_text},
+                              0);
+          _exit(0);
+        }
+      }; if ($@) {
+        warn "$$ - Error: $@\n";
+        my $dialog = Gtk2::MessageDialog->new($window,
+                                              'modal',
+                                              'error',
+                                              'cancel', "Error: $@");
+        my $response = $dialog->run;
+        $dialog->destroy;
+        _exit(1);
+      }
+  });
+
+  $window->show_all;
+  Gtk2->main;
+  exit;
+}
+
+
+# =======================================================================
+# fileChooser - show a file open/save dialogue box
+#
+sub fileChooser {
+  my ($type) = @_;
+  my $result = undef;
+
+  my $videoFilter = Gtk2::FileFilter->new;
+  $videoFilter->set_name('Video files');
+  $videoFilter->add_mime_type('video/*'); 
+
+  my $allFiles = Gtk2::FileFilter->new;
+  $allFiles->set_name('All files');
+  $allFiles->add_pattern('*');
+
+  my $file = Gtk2::FileChooserDialog->new(ucfirst($type).' file', undef, $type,
+                                          'gtk-cancel' => 'cancel',
+                                          'gtk-ok'     => 'ok',
+                                          'Rip DVD'    => 'help');
+  $file->add_filter($videoFilter);
+  $file->add_filter($allFiles);
+
+  my $action = $file->run;
+  if ($action eq 'ok') {
+    $result = $file->get_filename;
+    
+  } elsif ($action eq 'help') {
+    # TODO Pop up title selection dialogue.
+    $result = 'dvd:';
+  }
+  
+  $file->destroy;
+
+  return $result;
+} 
+
+
+
+# =======================================================================
+# openProgress - open a progress dialogue
+#
+sub openProgress {
+  my $quitAfter = shift;
+  my $progress  = Gtk2::Window->new('toplevel');
+  $progress->signal_connect(destroy => sub {
+        print "Cancelling conversion currently unsupported.\n";
+  });
+  $progress->set_title('Converting...');
+  $progress->set_border_width(10);
+  $progress->set_resizable(0);
+  $progress->set_modal(1);
+  $progress->{quitAfter} = $quitAfter;
+  
+  $progress->add($progress->{bar} = Gtk2::ProgressBar->new);
+  $progress->{bar}->set_text('');
+  $progress->{bar}->set_fraction(0.0);
+    
+  $progress->show_all;
+  
+  $SIG{CHLD} = sub { &REAPER($quitAfter) };
+  if ($progress->{child_pid} = open my $pipe, '-|') {
+    $progress->{tag} = Gtk2::Helper->add_watch( fileno($pipe), in => sub {
+      if (eof($pipe)) {
+        Gtk2::Helper->remove_watch($progress->{tag});
+        close($pipe);
+        $progress->destroy;
+        _exit(0) if $progress->{quitAfter};
+        
+      } else {
+        my $data   = '';
+        my $length = sysread($pipe, $data, 1024);
+        $_ = substr($data, 0, $length);
+        print;
+        if (/.*Pos:\s*(\d+\.?\d*)s\s*(\d+)f\s*\(\s*(\d+)\%\).*Trem:\s*(\d+\w+)\s*(\d+mb)/) {
+          my $pos = $3 / 100;
+          $pos = 0 if $pos < 0;
+          $pos = 1 if $pos > 1;
+          
+          $progress->{bar}->set_text(($progress->{file} || '')." ETA: $4");
+          $progress->{bar}->set_fraction($pos);
+        } elsif (/\+\+\+ (.*)\n/) {
+          $progress->{file} = (fileparse($1))[0];
+        }
+      }
+      
+      1;
+    });
+    
+  } else {
+    $| = 1;
+    $progress = undef;
+  }
+  
+  return $progress;
+}
+
+
+# =======================================================================
+# REAPER - a reaper of dead children/zombies with exit codes to spare
+#
+sub REAPER {
+  my $quitAfter = shift;
+  my $stiff;
+  while (($stiff = waitpid(-1, &WNOHANG)) > 0) {
+    _exit(0) if $quitAfter;
+  }
+  $SIG{CHLD} = \&REAPER;
+}        
+
+
+# =======================================================================
+# right - right-align a Gtk+ widget
+#
+sub right {
+  my $widget = shift;
+  my $alignment = Gtk2::Alignment->new(1, 0.5, 0, 0);
+  $alignment->add($widget);
+  return $alignment;
+}
+

@@ -1,0 +1,14 @@
+#!/bin/zsh
+
+original="$(pwd)"
+cd $HOME/Code/Projects/simple_serve
+
+# if [ -d "${original}/${1}" ] ; then
+#         pub_root="$(pwd)/${1}"
+# else if [ -d "${1}" ] ; then
+#         pub_root="${1}"
+# else
+	pub_root="/home/colin"
+# fi
+
+ruby start.rb $pub_root

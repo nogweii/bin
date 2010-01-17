@@ -1,0 +1,203 @@
+#!/bin/bash
+#
+# PirateSearch
+#
+# pbrisbin 2009
+#
+# woot for thepiratebay.org
+#
+# this script searches the piratebay, returns
+# the first 30 results, then downloads the user
+# selected torrent
+#
+# accepts any input as search term
+#
+# piratesearch 24
+# piratesearch porn
+# piratesearch the new hugh jackman flick
+#
+# requires:
+#       getopts
+#       wget
+#       lynx
+#
+###
+
+### User settings
+# place to download the torrents to
+#DIR="$HOME/Downloads"
+DIR="$(pwd)"
+
+# place to keep temp files
+WD="/tmp/piratesearch"
+
+
+### Below this, the program starts
+# make the directories if they don't exist
+[ -d $WD ] || mkdir -p $WD
+[ -d $DIR ] || mkdir -p $DIR
+
+[ -f $WD/results.lst ] && rm $WD/results.lst
+touch $WD/results.lst
+
+# a help message
+message() {
+  echo "PirateSearch"
+  echo "pbrisbin 2009"
+  echo ""
+  echo "PirateSearch will search thepiratebay.org and return"
+  echo "30 results at a time (press m for more).  The user can"
+  echo "then select which torrent to download to a Download"
+  echo "directory specified in the script."
+  echo ""
+  echo "If no options are passed \"All\" will be searched. One"
+  echo "or more of the following can also be passed"
+  echo ""
+  echo " Usage: pirateseaerch -a --video -gA some search terms"
+  echo ""
+  echo "        -a|--audio      search audio torrents"
+  echo "        -v|--video      search video torrents"
+  echo "        -A|--apps       search application torrents"
+  echo "        -g|--games      search games torrents"
+  echo "        -o|--other      search other torrents"
+  echo "        -h|--help       display this"
+  echo ""
+  exit 0
+}
+
+# function for displaying on screen
+display() {
+  if [ ! -z "$2" ] ; then
+    echo -ne "\e[1;34m:: \e[1;37m$1\e[0m"
+  else
+    echo -e "\e[1;34m:: \e[1;37m$1\e[0m"
+  fi
+}
+
+# function for displaying errors
+errorout() {
+  echo -e "\e[1;31m==> ERROR: \e[1;37m$1\e[0m\n"
+  rm -rf $WD
+  exit 1
+}
+
+# function for clean up and exit
+cleanexit() {
+  display "Goodbye..."
+  rm -rf $WD
+  exit 0
+}
+
+# this does the searching itself
+# accepts a result count, and uses criteria
+# which determines page and what to search: audio, video, etc
+# i hope to comment this more later, right now it's way
+# confusing...
+search () {
+  count=$1  
+
+  lynx -dump "http://thepiratebay.org/search/$term/$criteria" |\
+    grep \.torrent$ | awk '{print $2}' |\
+    cut -d "/" -f 5- | sed 's/\.TPB\.torrent//g' |\
+    while read result; do
+      NUM="$(echo $result | awk -F "." '{print $NF}')"
+      TITLE="$(echo $result | sed s/\.$NUM//g)"
+      echo "$count $NUM $TITLE" >> $WD/results.lst
+      count=$((count+1))
+    done
+      
+  cat $WD/results.lst | tail -n31 | while read lines; do
+    num="$(echo $lines | awk '{print $1}')"
+    title="$(echo $lines | awk '{print $3}' | sed 's/__/_/g' | sed 's/_/\ /g')"
+    echo -e "\t\e[1;32m$num \t\e[1;37m$title\e[0m"
+  done
+  echo ""
+ 
+  NOR=$(cat $WD/results.lst | wc -l)
+
+  [ $NOR -eq 0 ] && errorout "Search engine overloaded, please try again in a few seconds."
+
+  if [ $(( $NOR % 30 )) -ne 0 ]; then
+    display "Enter the number to download or q for [q]uit: " 1 && read A
+    while [ "$A" = "m" ]; do
+      display "No more results, enter the number to download or q for [q]uit: " 1 && read A
+    done
+  else
+    display "Enter the number to download, m for [m]ore, or q for [q]uit: " 1 && read A
+  fi
+  
+  [ "$A" = "q" ] && cleanexit
+}
+
+# getopt is AWESOME
+# here we parse the options, any combination of long, short,
+# together or separate options are accepted.  anything else
+# is used as the search term
+OPTS=`getopt -o havAgo --long help,audio,video,apps,games,other \
+     -n 'getopt.errors' -- "$@"`
+
+if [ $? != 0 ]; then
+  errorout "Invalid option."
+fi
+
+eval set -- "$OPTS"
+
+EXT=""
+
+while true; do
+  case "$1" in
+    -h|--help) message ;;
+    -a|--audio) EXT="${EXT},100" ; shift ;;
+    -v|--video) EXT="${EXT},200" ; shift ;;
+    -A|--apps) EXT="${EXT},300" ; shift ;;
+    -g|--games) EXT="${EXT},400" ; shift ;;
+    -o|--other) EXT="${EXT},500" ; shift ;;
+    --) shift; break ;;
+    *)
+    errorout "Invalid option."
+    ;;
+  esac
+done
+
+ext="$(echo $EXT | cut -c 2-)"
+
+if [ "$ext" = "" ]; then
+  ext="0"
+fi
+
+term="$@"
+
+# now we run through the searches.  start at page
+# 0 and result 1 then go up from there
+A="m"
+page=0
+count=1
+
+while [ "$A" = "m" ]; do
+  criteria="${page}/99/${ext}"
+  search $count
+  page=$((page+1))
+  count=$((count+30))
+done
+
+# get the torrent ID and Name to build the URL
+NUM="$(grep -e "^$A " $WD/results.lst | awk '{print $2}')"
+TITLE="$(grep -e "^$A " $WD/results.lst | awk '{print $3}')"
+
+[ "$NUM" = "" ] && errorout "Invalid choice, exiting..."
+
+URL="http://torrents.thepiratebay.org/${NUM}/${TITLE}.${NUM}.TPB.torrent"
+
+# and actually download it
+cd $DIR && wget "$URL"
+
+if [ $? -eq 0 ]; then
+  display "Success!"
+else
+  errorout "Error while downloading torrent."
+fi
+
+cleanexit
+
+### Created: 200904301442
+###  Edited: 200905011120
