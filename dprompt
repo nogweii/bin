@@ -1,9 +1,0 @@
-#!/bin/sh
-
-# A silly requirement, and something that I think should've been easier, but
-# whatever.
-#
-# All parameters are passed to dmenu as the prompt. The stdout is the user's
-# response.
-
-echo -n "" | dmenu -p "$@"

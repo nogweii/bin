@@ -1,6 +1,0 @@
-#!/bin/zsh
-
-exe=`dmenu_path | dmenu`
-if [ ! $? -gt 0 ] ; then
-	urxvt -e $exe
-fi

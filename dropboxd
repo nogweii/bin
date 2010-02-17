@@ -1,4 +1,0 @@
-#!/bin/sh
-
-cd ${HOME}/Downloads/dropboxd
-./dropboxd
