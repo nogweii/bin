@@ -1,0 +1,60 @@
+#!/bin/sh
+
+# This program is an exercise in straining your mind and also messing with
+# stdin, stdout, and stderr. For better or for worse, though I think this is
+# quite awesome.
+#
+# What is this program, really? It is supposed to be called by OpenSSH itself,
+# rather than the user. Set it as the ProxyCommand in your configuration file.
+#
+# Dependencies:
+#  * ps -- Standard utility, you probably already have this
+#  * (g)awk -- Standard utility, you probably already have this
+#  * keychain -- Wrapper around ssh-agent, http://www.gentoo.org/proj/en/keychain/
+#
+# Example call:
+#
+#    ssh-intercept %h %p
+#
+# If you have a custom key file, you need to specify it as the 3rd parameter
+# (i.e. if you specify IdentityFile in ~/.ssh/config)
+#
+#    ssh-intercept %h %p my_custom_key
+#
+# You can specify just the file, which then will look for it in `~/.ssh`, or you
+# specify an absolute path if the key isn't in `~/.ssh`.
+#
+# NOTE: The first and second parameters are ABSOLUTELY REQUIRED!
+
+DEBUG=0
+
+# $1 = real host to connect to
+hostname="$1"
+# $2 = port on the remote host
+port="$2"
+# $3 = the SSH key file name
+keyname="${3:-id_rsa}"
+
+# Get the pts device to read stdin from
+pts_term="/dev/$(ps -p$$ --no-heading | awk '{print $2}')"
+
+if [ $DEBUG ] ; then
+    echo "Host: $1 (port: $2)" 1>&2
+    echo "Process ID: $$" 1>&2
+    echo "tty stdin: $(tty)" 1>&2
+    echo "ps -p\$\$: $(ps -p$$ --no-heading)" 1>&2
+    echo "pts: $pts_term" 1>&2
+fi
+
+# Save the old stdin for later
+exec 3>&0
+# Use the new location, the pts proper for stdin now
+exec < $pts_term
+
+# Launch keychain
+keychain --quiet $keyname
+
+# Use the old stdin again, since OpenSSH needs it
+exec <&3
+
+exec nc $hostname $port
