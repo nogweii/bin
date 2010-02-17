@@ -1,6 +1,0 @@
-#!/bin/sh
-
-. git-sh-setup || . $(git --exec-path)/git-sh-setup || ( echo "git wip needs git to run." ; exit 1 )
-require_work_tree
-
-git log --shortstat -p $1^..$1
