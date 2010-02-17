@@ -1,7 +1,0 @@
-#!/bin/sh
-#\
-exec wish "$0" ${1+"$@"}
-package require Tk
-package require Tclx
-set argv [lassign $argv argv0]
-source $argv0
