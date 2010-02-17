@@ -1,7 +1,0 @@
-#!/usr/bin/ruby
-
-if ARGV[0]
-	puts "Hello #{ARGV[0]}!"
-else
-	puts "Hello, world!"
-end

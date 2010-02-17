@@ -1,6 +1,0 @@
-#!/bin/zsh
-
-# Uses shell scripting to reduce the output of `unrar l <file>` to just the files, without the license info
-
-foo=($(unrar l $1 2>&1 | grep -n "\-\-\-" | cut -d':' -f1))
-unrar l $1 2>&1 | head -n$[$foo[2]-1] | tail -n+$[$foo[1]+1]
