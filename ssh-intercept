@@ -6,6 +6,10 @@
 #
 # What is this program, really? It is supposed to be called by OpenSSH itself,
 # rather than the user. Set it as the ProxyCommand in your configuration file.
+# When this program is called, it reclaims STDIN so keychain & ssh-agent can
+# work. keychain then calls/starts ssh-agent and adds your key. You can call
+# this program as many times as you want, it will only ask for your password as
+# often as it needs to - which shouldn't be that many times, at all.
 #
 # Dependencies:
 #  * ps -- Standard utility, you probably already have this
@@ -52,7 +56,7 @@ exec 3>&0
 exec < $pts_term
 
 # Launch keychain
-keychain --quiet $keyname
+keychain --quiet $keyname 1>&2
 
 # Use the old stdin again, since OpenSSH needs it
 exec <&3
