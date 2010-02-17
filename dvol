@@ -11,16 +11,19 @@ BG="#ff9900"        # background colour of window
 FG="#ffffff"        # foreground colour of text/icon
 BAR_FG="#ffffff"    # foreground colour of volume bar
 BAR_BG="#444444"    # background colour of volume bar
-XPOS="705"          # horizontal positioning
-YPOS="500"          # vertical positioning
+SCR_HEIGHT="1080"          # screen height
+SCR_WIDTH="1920"           # screen width
 HEIGHT="30"         # window height
 WIDTH="250"         # window width
 BAR_WIDTH="165"     # width of volume bar
-ICON=~/path/to/icon.xbm
+ICON=~/.icons/dzen/comp_sound.xpm
 FONT="-*-dina-medium-r-*-*-13-*-*-*-*-*-*-*"
 
 #Probably do not customize
-PIPE="/tmp/dvolpipe"
+PIPE="/tmp/dvol"    # where the pipe is
+# The real center of the screen, dynamically calculated. Awesome and lazy.
+XPOS="$(echo $SCR_WIDTH/2 - $WIDTH/2 | bc)"
+YPOS="$(echo $SCR_HEIGHT/2 - $HEIGHT/2 | bc)"
 
 err() {
   echo "$1"
@@ -34,6 +37,7 @@ usage() {
   echo "     -i, --increase - increase volume by \`argument'"
   echo "     -d, --decrease - decrease volume by \`argument'"
   echo "     -t, --toggle   - toggle mute on and off"
+  echo "     -g, --get      - show the current volume"
   echo "     -h, --help     - display this"
   exit
 }
@@ -53,6 +57,9 @@ case "$1" in
   '-t'|'--toggle')
     AMIXARG="toggle"
     ;;
+  '-g'|'--get')
+    AMIXARG="get"
+    ;;
   ''|'-h'|'--help')
     usage
     ;;
@@ -62,7 +69,11 @@ case "$1" in
 esac
 
 #Actual volume changing (readability low)
-AMIXOUT="$(amixer set "$IF" "$AMIXARG" | tail -n 1)"
+if [ "$AMIXARG" = "get" ]; then
+    AMIXOUT="$(amixer get "$IF" | tail -n 1)"
+else
+    AMIXOUT="$(amixer set "$IF" "$AMIXARG" | tail -n 1)"
+fi
 MUTE="$(cut -d '[' -f 4 <<<"$AMIXOUT")"
 if [ "$MUTE" = "off]" ]; then
   VOL="0"
@@ -74,7 +85,7 @@ fi
 #Also prevents multiple volume bar instances
 if [ ! -e "$PIPE" ]; then
   mkfifo "$PIPE"
-  (dzen2 -tw "$WIDTH" -h "$HEIGHT" -x "$XPOS" -y "$YPOS" -fn "$FONT" -bg "$BG" -fg "$FG" < "$PIPE" 
+  (dzen2 -tw "$WIDTH" -h "$HEIGHT" -x "$XPOS" -y "$YPOS" -fn "$FONT" -bg "$BG" -fg "$FG" < "$PIPE"
    rm -f "$PIPE") &
 fi
 

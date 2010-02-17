@@ -1,0 +1,9 @@
+#!/bin/sh
+# simple popup dictionary, (c) 2007 by Robert Manea, (c) 2009 by Colin Shea
+
+LOOKUP=`xclip -out`
+
+(echo "$LOOKUP"; dict "$LOOKUP") | dzen2 -l 18 -p -w 500 \
+ -bg "darkblue" -fg "white" -x 710 -y 480 \
+ -fn '-*-helvetica-*-r-*-*-12-*-*-*-*-*-*-*' \
+ -e 'onstart=scrollhome,uncollapse;key_K=scrollup;key_J=scrolldown;key_Escape=exit;button4=scrollup;button5=scrolldown;button1=exit'
