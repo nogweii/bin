@@ -51,7 +51,7 @@ if [ -x $(which keychain 2>&1) ] ; then
     alias keychain="keychain --quiet" # Default: Quiet
     if [ -n "$DEBUG" ] ; then
         echo "DEBUG($DEBUG)"
-        echo "Host: $1 (port: $2)" 1>&2
+        echo "Host: $hostname (port: $port)" 1>&2
         echo "Process ID: $$" 1>&2
         echo "tty stdin: $(tty)" 1>&2
         echo "ps -p\$\$: $(ps -p$$ --no-heading)" 1>&2
