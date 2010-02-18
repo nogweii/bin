@@ -11,6 +11,11 @@
 # this program as many times as you want, it will only ask for your password as
 # often as it needs to - which shouldn't be that many times, at all.
 #
+# You should run `keychain --quiet` in your shell's RC file (e.g. '~/.bashrc' or
+# '~/.zshrc', etc) so the agent is started before calling ssh. This is important
+# as the environment variables need to be set in the shell calling ssh, adding
+# anything to the environment here will not affect ssh at the moment.
+#
 # Dependencies:
 #  * ps -- Standard utility, you probably already have this
 #  * (g)awk -- Standard utility, you probably already have this
