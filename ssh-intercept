@@ -42,7 +42,8 @@ keyname="${3:-id_rsa}"
 # Get the pts device to read stdin from
 pts_term="/dev/$(ps -p$$ --no-heading | awk '{print $2}')"
 
-if [ -n $DEBUG ] ; then
+if [ -n "$DEBUG" ] ; then
+    echo "DEBUG($DEBUG)"
     echo "Host: $1 (port: $2)" 1>&2
     echo "Process ID: $$" 1>&2
     echo "tty stdin: $(tty)" 1>&2
