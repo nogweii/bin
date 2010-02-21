@@ -43,12 +43,13 @@ hostname="$1"
 port="$2"
 # $3 = the SSH key file name
 keyname="${3:-id_rsa}"
+# Path to the keychain binary
+keychain=$(which keychain 2>&1)
 
-if [ -x $(which keychain 2>&1) ] ; then
+if [ -x $keychain ] ; then
     # Get the pts device to read stdin from
     pts_term="/dev/$(ps -p$$ --no-heading | awk '{print $2}')"
 
-    alias keychain="keychain --quiet" # Default: Quiet
     if [ -n "$DEBUG" ] ; then
         echo "DEBUG($DEBUG)"
         echo "Host: $hostname (port: $port)" 1>&2
@@ -56,7 +57,8 @@ if [ -x $(which keychain 2>&1) ] ; then
         echo "tty stdin: $(tty)" 1>&2
         echo "ps -p\$\$: $(ps -p$$ --no-heading)" 1>&2
         echo "pts: $pts_term" 1>&2
-        unalias keychain # Debugging, so be more verbose.
+    else
+        keychain="$keychain -q"
     fi
 
     # Save the old stdin for later
@@ -67,7 +69,7 @@ if [ -x $(which keychain 2>&1) ] ; then
     # There should be another keychain already started, and therefore load it's info
     source ~/.keychain/$HOSTNAME-sh
     # Launch keychain
-    keychain --agents ssh --ignore-missing $keyname 1>&2
+    $keychain --agents ssh --ignore-missing $keyname 1>&2
 
     # Use the old stdin again, since OpenSSH needs it
     exec <&3
