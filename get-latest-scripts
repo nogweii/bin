@@ -3,9 +3,11 @@
 echo "Downloading latest versions of some scripts..."
 
 dl() {
-    wget -q $1 -O ~/bin/$2
+    echo -n "$2..."
+    wget --quiet $1 -O ~/bin/$2
     chmod a+x ~/bin/$2
+    echo "done!"
 }
-
-dl http://git.kitenet.net/?p=mpdtoys.git;a=blob_plain;f=mpfade;hb=HEAD mpfade
-dl http://betterthangrep.com/ack-standalone ack
+dl "http://git.kitenet.net/?p=mpdtoys.git;a=blob_plain;f=mpfade;hb=HEAD" "mpfade"
+dl "http://betterthangrep.com/ack-standalone" "ack"
+dl "http://defunkt.github.com/hub/standalone" "hub"
