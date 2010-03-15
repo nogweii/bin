@@ -1,0 +1,11 @@
+#!/bin/sh
+COMMAND=""
+for arg in "$@" ; do
+	# May not be needed, though.
+	# Introduce one more level of escapes for backslashes (\\) and quotes
+	# (\")
+	arg=$(echo $arg | sed 's$\\$\\\\$g; s$\\"$\\\\"$g')
+	COMMAND="$COMMAND \"$arg\""
+done
+#echo $COMMAND, $ARG
+ssh local -- DISPLAY=:0 $COMMAND

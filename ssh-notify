@@ -1,0 +1,2 @@
+#!/bin/sh
+ssh-local '`whence notify-send`' $@
