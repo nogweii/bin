@@ -1,0 +1,11 @@
+#!/bin/sh
+
+echo "Downloading latest versions of some scripts..."
+
+dl() {
+    wget -q $1 -O ~/bin/$2
+    chmod a+x ~/bin/$2
+}
+
+dl http://git.kitenet.net/?p=mpdtoys.git;a=blob_plain;f=mpfade;hb=HEAD mpfade
+dl http://betterthangrep.com/ack-standalone ack
