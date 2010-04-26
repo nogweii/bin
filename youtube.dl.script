@@ -1,0 +1,7 @@
+#!/bin/sh
+
+echo $$ > /tmp/youtube.dl.script.pid
+cd ~/media/vid/youtube
+for url in `cat ~/tmp/youtube.dl` ; do
+    youtube-dl -cwtbn "$url"
+done
