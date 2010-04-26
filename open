@@ -1,0 +1,7 @@
+#!/bin/sh
+
+# A simple shell wrapper that redirects all of xdg-open's output to /dev/null
+#
+# This would work well as a shell alias, but those aren't exposed to child programs!
+
+$(command -v xdg-open open firefox | head -1) $@ &> /dev/null
