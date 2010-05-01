@@ -2,6 +2,7 @@
 
 if [ -z "$1" ] ; then
     echo "Need a audio portal ID!"
+    echo "Not a URL, but just the ID."
     exit 1
 fi
 
