@@ -8,7 +8,7 @@ fi
 
 filename="/tmp/newgrounds_$1"
 
-echo "Downloading newgrouds song #$1..."
+echo "Downloading Newgrounds song #$1..."
 wget "http://www.newgrounds.com/audio/download/$1" -qO- | pv -w80 > $filename
 
 # Get the information
