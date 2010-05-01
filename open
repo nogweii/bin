@@ -4,4 +4,4 @@
 #
 # This would work well as a shell alias, but those aren't exposed to child programs!
 
-$(command -v xdg-open open firefox | head -1) $@ &> /dev/null
+$(command -v xdg-open open firefox | head -1) "$@" &> /dev/null
