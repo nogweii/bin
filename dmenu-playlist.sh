@@ -8,4 +8,6 @@ song_choice=`(mpc playlist | dmenu -i -p 'song name') || echo ";;;"`
 song_number=`mpc playlist | nl -s ';' | sed -n "s@^ *\([0-9]\+\);$song_choice@\1@p"`
 
 # Play that position in the playlist
-mpc play $song_number
+if [ ! -z "$song_number" ] ; then
+    mpc play $song_number
+fi
