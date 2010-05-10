@@ -1,0 +1,92 @@
+#!/usr/bin/ruby
+
+# dmenu accepts a list of items, to which the user filters. The most common
+# use of dmenu is to find all binaries in $PATH and select from one of those.
+# This is useful if you know what the application's binary is called before hand
+# but if the user does not know the binary name, but does know the application's
+# name, this script should be used instead.
+#
+# Looping through all the desktop entries in /usr/share/applications, find all
+# the applications. (avoiding those that are solely for MIME type registration)
+# Then display the application's name (e.g. Okuluar, Firefox, etc). Given the
+# user's choice, run the application's command.
+#
+# NOTE: The field codes for Exec are not supported at this time, and are
+# stripped, for the time being.
+
+# Temporary value, to avoid any calls to nil before the real value is set
+@lines = []
+
+# Given a string, find the default value.
+#
+# TODO: Does not support localized values yet
+def find_key(key)
+    value = @lines.grep(/^\s*#{key.capitalize}\s*=/).last
+    if !!value
+        value.split('=')[1..-1].join("=").strip
+    else
+        ""
+    end
+end
+
+# Simple Dir glob, recursively finding all .desktop files
+# XXX: Can this be faster? Does it need to be?
+desktops = Dir["/usr/share/applications/**/*.desktop"]
+
+# The meat of this application, the application processing
+applications = desktops.map do |app|
+    # Load the file into memory
+    @lines = File.readlines(app)
+    good = true # Optimistic thinking ftw!
+
+    # Only select appropriate applications that want to be displayed
+    if find_key("Type").downcase != "application"
+        good = false
+    end
+
+    if find_key("NoDisplay") == "true"
+        good = false
+    end
+
+    if good
+        # We want this application, so grab it's name
+        name = find_key("Name")
+
+        # Strip the field codes
+        app_exec = find_key("Exec").gsub(/(-?-\w+ )?\"?\%[fFuUick]\"?/, '').gsub(/(\s)+/, '\1').strip
+        # If this application needs to be ran in a terminal, call $TERMINAL
+        # (falling back to $TERM, or 'xterm')
+        if find_key("Terminal") == "true"
+            app_exec = "#{ENV['TERMINAL'] || ENV['TERM'] || 'xterm'} -c \"#{app_exec}\""
+        end
+
+        # Return an array pair, later to be converted into a hash key/value pair
+        [name, app_exec]
+    else
+        # nil is the default value
+        nil
+    end
+
+# Reject all applications which did not match the criteria set above
+end.reject do |app|
+    app.nil?
+end
+
+# Convert the array of pairs into a hash
+app_hash = Hash[applications.sort]
+
+# Open an IO channel with dmenu
+dm = IO.popen('dmenu', 'w+')
+# Put each application name into stdin
+app_hash.keys.each do |value|
+    dm.puts value
+end
+# Wait for the user
+dm.close_write
+choice = dm.read
+# Close & shutdown
+dm.close
+# Execute the application choice, if that is what the user chose.
+if $? == 0
+    exec app_hash[choice]
+end
