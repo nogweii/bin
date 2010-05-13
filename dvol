@@ -16,7 +16,8 @@ SCR_WIDTH="1920"    # screen width
 HEIGHT="30"         # window height
 WIDTH="250"         # window width
 BAR_WIDTH="165"     # width of volume bar
-ICON=~/.icons/dzen/comp_sound.xpm
+SOUND_ICON=~/.icons/dzen/vol-hi.xbm
+MUTE_ICON=~/.icons/dzen/vol-mute.xbm
 FONT="-*-dina-medium-r-*-*-13-*-*-*-*-*-*-*"
 
 #Probably do not customize
@@ -79,6 +80,13 @@ if [ "$MUTE" = "off]" ]; then
   VOL="0"
 else
   VOL="$(cut -d '[' -f 2 <<<"$AMIXOUT" | sed 's/%.*//g')"
+fi
+
+# Set the correct icon if the volume is muted/zero
+if [ "$VOL" = "0" ]; then
+    ICON=$MUTE_ICON
+else
+    ICON=$SOUND_ICON
 fi
 
 #Using named pipe to determine whether previous call still exists
