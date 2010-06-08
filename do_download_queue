@@ -1,0 +1,39 @@
+#!/usr/bin/ruby
+
+@queue_file = "#{ENV['HOME']}/tmp/download_queue.txt"
+#@lock_file = "#@queue_file.lock"
+#if File.exists? @lock_file
+#    exit 1
+#end
+#
+#@lock_file = File.open(@lock_file, "w")
+
+begin
+  require 'net/http'
+  File.readlines(@queue_file).each do |url|
+    next if url =~ /^#/
+    uri = URI(url)
+    name = File.basename(url).strip
+
+    File.open(name, "w") do |local_file|
+      Net::HTTP.get_response(uri) do |res|
+
+        size, message, total = 0, "", res.header['Content-Length'].to_i
+
+        res.read_body do |chunk|
+          size += chunk.size
+
+          print "\b"*message.length
+          message = "#{name}: %d%% done (%d of %d)" % [(size * 100) / total, size, total]
+          print message
+
+          local_file << chunk
+        end
+      end
+    end
+    puts ""
+  end
+#ensure
+#  @lock_file.close
+#  File.unlink @lock_file
+end

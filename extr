@@ -1,24 +1,35 @@
 #!/bin/sh
 #tar=$(command -v bsdtar tar | head -n1)
 tar="tar"
-if [ -f $1 ] ; then
-  case $1 in
-    *.tar.bz2) $tar xjf $1 ;;
-    *.tar.gz) $tar xzf $1 ;;
-    *.bz2) bunzip2 $1 ;;
-    *.rar) unrar e $1 ;;
-    *.gz) gunzip $1 ;;
-    *.tar) $tar xf $1 ;;
-    *.tbz2) $tar xjf $1 ;;
-    *.tgz) $tar xzf $1 ;;
-    *.zip) unzip $1 ;;
-    *.Z) uncompress $1 ;;
-    *.7z) 7z x $1 ;;
-    *.xz) unxz -vk $1 ;;
-    *.lzma) unlzma -vk $1 ;;
-    *.rpm) rpm2cpio $1 | $tar xf - ;;
-    *) echo "'$1' cannot be extracted via extr" ;;
-  esac
-else
-  echo "'$1' is not a valid file"
+didnt_extract=0
+
+if [ ! -f "$1" ] ; then
+    echo "'$1' is not a file"
+    exit 2
+fi
+
+compressed_file=$1
+
+while [ "$didnt_extract" -eq 0 ]; do
+    case "$compressed_file" in
+        *.bz2) bunzip2 "$compressed_file" ;;
+        *.rar) unrar e "$compressed_file" ;;
+        *.gz) gunzip "$compressed_file" ;;
+        *.tar) $tar xf "$compressed_file" ;;
+        *.tbz2) $tar xjf "$compressed_file" ;;
+        *.tgz) $tar xzf "$compressed_file" ;;
+        *.zip) unzip "$compressed_file" ;;
+        *.Z) uncompress "$compressed_file" ;;
+        *.7z) 7z x "$compressed_file" ;;
+        *.xz) xz -d "$compressed_file" ;;
+        *.lzma) unlzma -vk "$compressed_file" ;;
+        *.rpm) rpm2cpio "$compressed_file" | $tar xf - ;;
+        *) didnt_extract=1 ;;
+    esac || exit 1
+    compressed_file=$(echo $compressed_file | sed 's/\.[^.]*$//')
+done
+
+if [ $didnt_extract -eq 0 ]; then
+    echo "'$1' cannot be extracted via extr"
+    exit 3
 fi
