@@ -1,0 +1,9 @@
+#!/bin/sh
+
+if [ -x /usr/bin/yeganesh ] ; then
+   dbin='yeganesh -p dmenu_run --'
+else
+   dbin='dmenu'
+fi
+
+exe=`dmenu_path | $dbin -fn '-misc-terminus-r-*-*-*-*-*-*-*-*-*-u' ${1+"$@"}` && exec $exe

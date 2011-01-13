@@ -1,0 +1,4 @@
+startx &> ~/startx.sleeper.log &
+pid=$?
+sleep 30;
+kill -9 $?

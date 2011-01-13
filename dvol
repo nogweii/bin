@@ -5,7 +5,7 @@
 # thanks to http://bbs.archlinux.org/viewtopic.php?id=46608
 
 #Customize this stuff
-IF="PCM"            # audio channel: Master, PCM, etc
+IF="Master"         # audio channel: Master, PCM, etc
 SECS="1"            # sleep $SECS
 BG="#ff9900"        # background colour of window
 FG="#ffffff"        # foreground colour of text/icon

@@ -1,0 +1,9 @@
+#!/usr/bin/ruby
+
+# http://www.thedailyshow.com/full-episodes/mon-september-27-2010-bill-o-reilly
+# http://www.colbertnation.com/full-episodes/mon-september-27-2010-ken-burns
+
+puts "URL redirects to the latest Daily Show and Colbert Report episodes: (1 day late)"
+puts
+puts "http://www.thedailyshow.com/full-episodes/"
+puts "http://www.colbertnation.com/full-episodes/"

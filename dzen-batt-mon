@@ -1,0 +1,53 @@
+#!/bin/sh
+#
+# by lyon8 (lyon8@gmx.net)
+# show your laptop battery state in dzen
+
+BG='#000'  # dzen backgrounad
+FG='#ddd'  # dzen foreground
+W=265      # width of the dzen bar
+GW=50      # width of the gauge
+GFG='#999' # color of the gauge
+GH=12      # height of the gauge
+GBG='#333' # color of gauge background
+X=1547     # x position
+Y=1000     # y position
+FN='"xft:Liberation Mono:size=7"' # font
+
+STATEFILE='/proc/acpi/battery/BAT0/state' # battery's state file
+INFOFILE='/proc/acpi/battery/BAT0/info'   # battery's info file
+
+MIDBAT=65        # percentage of battery life marked as low
+MIDCOL='#dddd47' # color when battery is low
+LOWBAT=30        # percentage of battery life marked as low
+LOWCOL='#dd4747' # color when battery is low
+TIME_INT=15      # time interval in seconds
+
+# Path to the icons for dzen
+ICON_PATH="$HOME/.data/icons/dzen"
+# Today's date & current time
+DATE_FORMAT="%d %b %Y %H.%M"
+
+while true; do
+    # look up battery's data
+    BAT_FULL=`cat $INFOFILE|grep design|line|cut -d " " -f 11`;
+    STATUS=`acpi -a | cut -d':' -f2`;
+    RCAP=`cat $STATEFILE|grep remaining|cut -d " " -f 8`;
+
+    # calculate remaining power
+    RPERCT=`expr $RCAP \* 100`;
+    RPERC=`expr $RPERCT / $BAT_FULL`;
+
+    # draw the bar and pipe everything into dzen
+    if [ $RPERC -gt $MIDBAT ]; then GFGC=$GFG; fi
+    if [ $RPERC -le $MIDBAT ]; then GFGC=$MIDCOL; fi
+    if [ $RPERC -le $LOWBAT ]; then GFGC=$LOWCOL; fi
+    echo -n $(date +"$DATE_FORMAT")
+    if [ "$STATUS" = " on-line" ] ; then
+        echo -n " ^i(${ICON_PATH}/ac_01.xbm)"
+    else
+        echo -n " ^i(${ICON_PATH}/battery.xbm)"
+    fi
+    eval echo $RPERC | gdbar -h $GH -w $GW -fg $GFGC -bg $GBG
+    sleep $TIME_INT;
+done | dzen2 -ta c -tw $W -y $Y -x $X -fg "$FG" -bg "$BG" -fn "$FN" -h 18

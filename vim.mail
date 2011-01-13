@@ -1,0 +1,5 @@
+#!/bin/sh
+
+vim -c ":set ft=mail" $@
+
+# vim: set syn=sh:

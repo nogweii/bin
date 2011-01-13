@@ -1,0 +1,13 @@
+#!/bin/bash
+
+COLOUR_LIST=$HOME/.hsetroot_colours
+
+rndcolour() {
+    cat $COLOUR_LIST | shuf | head -n 1
+}
+
+rndangle() {
+    echo $((RANDOM % 360))
+}
+
+hsetroot -add "$(rndcolour)" -add "$(rndcolour)" -add "$(rndcolour)" -gradient $(rndangle)

@@ -6,6 +6,7 @@ echo 'Clearing & randomly shuffling all songs in the library...'
 (
    mpc clear                        # clear the playlist
    mpc random off                   # turn off random
+   mpc shuffle on                   # turn on shuffle
    mpc listall | sort -R | mpc add  # add all songs, randomly.
    mpc play                         # start playing those songs!
 ) &> /dev/null

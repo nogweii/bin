@@ -9,6 +9,6 @@ DEFAULT_OPTIONS="-o -f"
 
 urxvtc "$@"
 if [ $? -eq 2 ]; then
-    urxvtd $DEFAULT_OPTIONS
-    $0 "$@"
+    urxvtd $DEFAULT_OPTIONS &
+    urxvtc "$@"
 fi

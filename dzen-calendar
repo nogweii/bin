@@ -1,0 +1,45 @@
+#!/bin/bash
+#
+# pop-up calendar for dzen
+#
+# (c) 2007, by Robert Manea
+#
+
+#TODAY=$(expr `date +'%d'` + 0)
+#MONTH=`date +'%m'`
+#YEAR=`date +'%Y'`
+#
+#(
+#echo -n '^bg(grey70)^fg(#111111)'
+#date +'%A, %d %b %Y %H:%M'
+#date +'%I:%M %p'
+## current month, highlight header and today
+#cal | sed -r -e "1,2 s/.*/^fg(white)&^fg()/" \
+#             -e "s/(^| )($TODAY)($| )/\1^bg(white)^fg(#111)\2^fg()^bg()\3/"
+#) \
+#    | dzen2 -p 60 -fn '-*-*-*-*-*-*-18-*-*-*-*-*-iso10646-*' -x 400 -y 60 \
+#            -w 275 -l 9 -sa l # -e 'onstart=uncollapse;button3=exit'
+
+
+#!/bin/bash
+#
+# pop-up calendar for dzen
+#
+# based on (c) 2007, by Robert Manea
+# http://dzen.geekmode.org/dwiki/doku.php?id=dzen:calendar
+# modified by urukrama
+#
+
+TODAY=$(expr `date +'%d'` + 0)
+MONTH=`date +'%m'`
+YEAR=`date +'%Y'`
+
+(
+echo '^bg(#222222)^fg(#DE8834)'`date +'%d %b %H.%M'`;
+
+# current month, hilight header and today
+cal | sed -re "s/^(.*[A-Za-z][A-Za-z]*.*)$/^fg(#DE8834)^bg(#222222)\1/;
+s/(^|[ ])($TODAY)($|[ ])/\1^bg(#DE8834)^fg(#222222)\2^fg(#6c6c6c)^bg(#222222)\3/"
+sleep 8
+) | dzen2 -fg '#6c6c6c' -bg '#222222' -fn 'xft:Terminus:size=10' -x 828 -y 730 \
+          -w 160 -l 7

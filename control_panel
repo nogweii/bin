@@ -1,0 +1,147 @@
+#!/bin/bash
+# System Information
+
+bar="ߊߊߊߊߊߊߊߊߊߊ"
+full="❰- FULL -❱"
+high="\033[1;33m"
+low="\033[0;37m"
+reset="\033[0m"
+IFS=$(echo -e "\n")
+echo
+
+# Info ----------------------
+echo | awk \
+-v high="$high" \
+-v low="$low" \
+-v reset="$reset" \
+-v kernel=$(uname -r) \
+-v proc=$(uname -p) \
+-v boot=$(who -b | awk '{print $3" "$4}') \
+-v freq=$(cat /proc/cpuinfo | awk '/MHz/ {print substr($4/1000,1,3)"GHz"}' | tr '\n' ' ') \
+-v up=$(uptime | awk '{
+    split($5,a,":");
+    split($1,b,":");
+    printf "%sd %sh %sm %ss",$3,a[1],int(a[2]),b[3];
+}') '{
+    split("Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec",m,",");
+    split(boot,tmp," ");
+    split(tmp[1],d,"-");
+    split(tmp[2],t,":");
+    hour = (t[1]>12)?t[1]-12:t[1];
+    mer  = (t[1]>12)?"pm":"am";
+    min  = t[2];
+
+    printf high"GNU/Linux "reset"%-15s %38s "high"%6s\n"reset,kernel,proc,freq;
+    printf "Uptime: "low"%-17s"reset" %23s "low"%3s. %2s, %4s %2s:%2s%2s\n\n"reset,
+    up,"Last Reload:",m[int(d[2])],d[3],d[1],hour,min,mer;
+}'
+
+# Users ---------------------
+echo -e $high"Username        TTY  Since          Home                 Size   ACT  PN"$reset
+who -u | awk \
+-v low="$low" \
+-v reset="$reset" \
+'BEGIN{
+    while("cat /etc/passwd" | getline>0){
+        split($0,l,":");
+        home[l[1]]=l[6];
+    }
+}{
+    "ps -u"$1" | wc -l" | getline pn;
+    "du -hs "home[$1]   | getline line
+    split("Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec",m,",");
+    split($3,d,"-");
+    split(line,size," ")
+
+    printf "%-12s %6s  %-3s. %2s, %4s  %-18s %6s "(($5=="old")?low:"")" %4s"reset" %3s\n",
+    $1,$2,m[int(d[2])],d[3],d[1],home[$1],size[1],($5=="old")?"idle":$5,pn-1;
+}'
+echo
+
+# Network -------------------
+echo -e $high"Interface      IPv4 Address  RX Packets     Bytes  TX Packets     Bytes"$reset
+ifconfig -a | awk \
+-v high="$high" \
+-v low="$low" \
+-v reset="$reset" \
+'BEGIN{
+    line = 1;
+}{
+    if($0==""){
+        if(NR!=1){
+            printf ((stat)?(name=="lo"?high:""):low)"%-8s "reset,name;
+            printf ((stat)?"":low)"%18s %10sK %8sM %10sK %8sM\n",
+            addr"/"cidr,int(RXP/1000),int(RXB/1048576),
+            int(TXP/1000),int(TXB/1048576);
+        }
+        name = "";
+        stat = "";
+        addr = "0.0.0.0";
+        cidr = "32";
+        mac  = "00:00:00:00:00:00";
+        TXP  = ""; TXB  = "";
+        RXP  = ""; RXB  = "";
+        line = 1;
+    }else{
+        if(line==1){
+            name=$1;
+            for(i=3;i<NF;i++){if($i=="HWaddr") mac=$i+1};
+        }
+        if($1=="UP") stat=1;
+        if($1=="TX") TXP=substr($2,9);
+        if($1=="RX" && substr($2,1,1)=="p") RXP=substr($2,9);
+        if($1=="RX" && substr($2,1,1)=="b"){RXB=substr($2,7);TXB=substr($6,7)};
+        if($1=="inet"){
+            addr=substr($2,6);
+            split(substr($4,6),m,".");
+            for(i=0;i<4;i++){
+                bit=7;
+                while(1){
+                    if(!m[i]) break;
+                    m[i]-=2^bit--;
+                    cidr++;
+                }
+            }
+        }
+        line++;
+    }
+}'
+ip=$(wget -O - -o /dev/null http://checkip.dyndns.com/ | awk '{print substr($6,1,match($6,"<")-1)}')
+whois $ip | awk \
+-v high=$high \
+-v low=$low \
+-v reset=$reset \
+-v ip=$ip \
+'/OrgName:/ {
+        printf high"%-8s"reset" %15s/32 "low"%11s %9s %11s %9s\n\n",
+        tolower($2),ip,"n/a","n/a","n/a","n/a";
+}'
+
+# Memory and Storage --------
+dev=$(df -hT | awk 'NR!=1')
+mem=$(free -mo | awk '/Mem:/ {print "/dev/mem none "$2"M "$3"M "$4"M "int($3/$2*100)"% mem"}')
+swp=$(cat /proc/swaps | awk 'NR!=1 {
+    total = int($3/1024)
+    used  = int($4/1024)
+    free  = int(($3-$4)/1024)
+    perc  = int($4/$3*100)
+    printf "%s swap %sM %sM %sM %s swap",$1,total,used,free,perc"%";
+}')
+
+echo -e $high"Device         Type   Free   Used   Total  Capacity           Location"$reset
+echo -e "$dev\n$mem\n$swp" | sort | awk \
+-v bar="$bar" \
+-v full="$full" \
+-v high="$high" \
+-v low="$low" \
+-v reset="$reset" \
+'{
+    highlight = ($7=="mem" || $7=="/" || $7=="swap")?high:"";
+    lowlight  = ($2=="none")?low:"";
+    capacity  = substr(bar,1,int(int($6)/10+0.5));
+
+    printf lowlight"%-11s %7s "low"%6s %6s %7s  ",$1,$2,$5,$4,$3;
+    printf high"[%-10sߊ%4s]  "(reset)(lowlight)(highlight)"%s"reset"\n",
+    (int($5)<5)?full:capacity,$6,$7;
+}'
+echo
