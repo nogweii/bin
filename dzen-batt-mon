@@ -11,7 +11,7 @@ GFG='#999' # color of the gauge
 GH=12      # height of the gauge
 GBG='#333' # color of gauge background
 X=1547     # x position
-Y=1000     # y position
+Y=0        # y position
 FN='"xft:Liberation Mono:size=7"' # font
 
 STATEFILE='/proc/acpi/battery/BAT0/state' # battery's state file
