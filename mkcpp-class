@@ -9,10 +9,10 @@ begin
   trap('INT') { system('stty', stty_save); exit }
 
   class_name = Readline.readline("Class Name: ")
-  class_name.capitalize!
+  class_name = class_name.gsub(/\b\w/){$&.upcase}.delete(' ')
 
   subclass_name = Readline.readline("Subclass of: ")
-  subclass_name.capitalize!
+  subclass_name = subclass_name.gsub(/\b\w/){$&.upcase}.delete(' ')
 rescue Interrupt => e
   system('stty', stty_save) # Restore
   exit
@@ -25,7 +25,8 @@ end
 hpp_skel = <<EOSKEL
 #ifndef #{class_name.upcase}_HPP
 #define #{class_name.upcase}_HPP
-#
+
+#{File.exists?("StandardIncludes.h") ? '#include "StandardIncludes.h"' : ""}
 #{subclass_name.empty? ? "" : "#include \"#{subclass_name}.h\"\n"}
 /**
  * @brief ... short description ...
@@ -35,25 +36,25 @@ hpp_skel = <<EOSKEL
  */
 class #{class_name}#{subclass_name.empty? ? "" : " : public #{subclass_name}"}
 {
-  public:
+    public:
 
-    /**
-     * Default constructor
-     */
-    #{class_name}();
+        /**
+         * Default constructor
+         */
+        #{class_name}();
 
-    /**
-     * Destructor
-     */
-    virtual ~#{class_name}();
+        /**
+         * Destructor
+         */
+        virtual ~#{class_name}();
 
-    /**
-     * Standard procedure: include a string representation
-     * @return A string version of the object, only useful to output to console.
-     */
-    std::string toString();
+        /**
+         * Standard procedure: include a string representation
+         * @return A string version of the object, only useful for CLI.
+         */
+        std::string toString();
 
-  private:
+    private:
 
 };
 
@@ -70,14 +71,14 @@ cpp_skel = <<EOSKEL
 
 #{class_name}::~#{class_name}()
 {
-  // cleanup
+    // cleanup
 }
 
 std::string #{class_name}::toString()
 {
-  ostringstream result;
-  result << "";
-  return result.str();
+    ostringstream result;
+    result << "";
+    return result.str();
 }
 EOSKEL
 
