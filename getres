@@ -1,0 +1,8 @@
+#!/usr/bin/ruby
+
+resource_path = ARGV[0]
+if resource_path =~ /\./
+    application = resource_path.split(".")
+    system("appres ")
+end
+# appres dzen | sed -n "/^dzen.font:\\s*/s///p"
