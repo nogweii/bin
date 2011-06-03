@@ -1,4 +1,4 @@
-// 2>/dev/null; cc -o xdark -Wall xdark.c -L/usr/X11R6/lib -lm -lX11 -lXxf86vm && exec ./xdark "$@"; exit
+// cc -o xdark -Wall xdark.c -L/usr/X11R6/lib -lm -lX11 -lXxf86vm && exec ./xdark "$@"; exit
 
 #include <stdio.h>
 #include <stdlib.h>
