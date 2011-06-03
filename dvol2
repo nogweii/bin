@@ -21,7 +21,7 @@ MUTE_ICON=~/.data/icons/dzen/vol-mute.xbm
 FONT="-*-dina-medium-r-*-*-13-*-*-*-*-*-*-*"
 
 #Probably do not customize
-PIPE="/tmp/dvol"    # where the pipe is
+PIPE="$XDG_DATA_HOME/dvol"    # where the pipe is
 # The real center of the screen, dynamically calculated. Awesome and lazy.
 XPOS="$(echo $SCR_WIDTH/2 - $WIDTH/2 | bc)"
 YPOS="$(echo $SCR_HEIGHT/2 - $HEIGHT/2 | bc)"

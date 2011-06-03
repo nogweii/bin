@@ -1,6 +1,6 @@
 #!/bin/zsh
 
-# XDG-Open's called script, this will run Opera/elinks depending on DISPLAY
+# XDG-Open's called script, this will run firefox/elinks depending on DISPLAY
 
 if [ -e "$(pwd)/${1}" ] ; then
 	url="file://$(pwd)/${1}"
@@ -9,29 +9,14 @@ else
 fi
 
 if [ $DISPLAY ] ; then
-	# Have to do this, as the malloc() calls in preloaded libraries results in a
-	# deadlock in Firefox's libjemalloc. Sucks.
-	#
-	# See mozilla bug 497117
-	unset LD_PRELOAD
-	
-	pid=$(pidof firefox)
-	if [ ! -z $pid ] ; then
-		echo "pidof firefox"
-		firefox $url	
-	else
-		echo "new firefox"
-		# aoss: For flash player + ALSA compat
-		# -jssh: For JavaScript shell, and FireWatir
-		firefox -jssh $url
-		#aoss firefox -jssh $url
-		# Can't do AOSS, see memory allocation issues from above.
-	fi
+	firefox.sh $url
+	notify-send -i "/usr/share/icons/hicolor/48x48/apps/firefox.png" \
+		"firefox-bin" "Firefox has finally closed"
 else
 	pid=$(pidof elinks)
 	if [ ! -z $pid ] ; then
 		echo "pidof elinks"
-		elinks -remote "openURL(${url})" > /dev/null
+		elinks -remote "${url}" > /dev/null
 	else
 		echo "new elinks"
 		elinks $url > /dev/null

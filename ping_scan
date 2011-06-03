@@ -1,0 +1,6 @@
+#!/usr/bin/ruby
+for k in 1..254
+  for i in 1..254
+    puts system("ping -c 1 192.168.#{k}.#{i}")
+  end
+end

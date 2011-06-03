@@ -1,0 +1,7 @@
+#!/bin/sh
+
+# Simple xrdb script which also defines a lot of symbols for the c-style
+# pre-processor. (cpp)
+
+xrdb -DHOME=$HOME $(echo $(xrdb -symbols | grep -Ev "\"|'")) \
+     -all -load $HOME/.Xdefaults

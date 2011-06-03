@@ -1,0 +1,7 @@
+#!/bin/sh
+
+file=$1
+
+echo -n "sudo " | cat - $file > $file.2
+rm $file
+mv $file.2 $file

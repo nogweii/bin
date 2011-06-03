@@ -1,0 +1,8 @@
+#!/bin/sh
+
+export WINEPREFIX="/home/colin/.local/share/wineprefixes/eve"
+export LD_PRELOAD=""
+if [ ! -z "$1" ] ; then
+    winecfg
+fi
+wine "C:\\Program Files (x86)\\CCP\\EVE\\eve.exe"

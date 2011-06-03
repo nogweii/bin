@@ -1,0 +1,88 @@
+#!/usr/bin/ruby
+
+require 'date'
+require 'readline'
+
+begin
+  # Store the state of the terminal
+  stty_save = `stty -g`.chomp
+  trap('INT') { system('stty', stty_save); exit }
+
+  class_name = Readline.readline("Class to test: ")
+  class_name.capitalize!
+
+  subclass_name = Readline.readline("Subclass of: ")
+  subclass_name.capitalize!
+rescue Interrupt => e
+  system('stty', stty_save) # Restore
+  exit
+end
+
+if File.exists? "#{class_name}.h" or File.exists? "#{class_name}.cpp"
+  warn "Class already exists! Exiting..."
+end
+
+hpp_skel = <<EOSKEL
+#ifndef #{class_name.upcase}_HPP
+#define #{class_name.upcase}_HPP
+
+#{File.exists?("StandardIncludes.h") ? '#include "StandardIncludes.h"' : ""}
+#{subclass_name.empty? ? "" : "#include \"#{subclass_name}.h\"\n"}
+/**
+ * @brief ... short description ...
+ * @author Colin 'Evaryont' Shea <colin@evaryont.me>
+ * @date #{Date.today.strftime('%d %b %Y')}
+ * ... description ...
+ */
+class #{class_name}#{subclass_name.empty? ? "" : " : public #{subclass_name}"}
+{
+    public:
+
+        /**
+         * Default constructor
+         */
+        #{class_name}();
+
+        /**
+         * Destructor
+         */
+        virtual ~#{class_name}();
+
+        /**
+         * Standard procedure: include a string representation
+         * @return A string version of the object, only useful for CLI.
+         */
+        std::string toString();
+
+    private:
+
+};
+
+#endif /* #ifndef #{class_name.upcase}_HPP */
+EOSKEL
+cpp_skel = <<EOSKEL
+#include "#{class_name}.h"
+
+// #{Date.today.strftime('%d %b %Y')} Colin 'Evaryont' Shea <colin@evaryont.me>
+
+#{class_name}::#{class_name}()
+{
+}
+
+#{class_name}::~#{class_name}()
+{
+    // cleanup
+}
+
+std::string #{class_name}::toString()
+{
+    ostringstream result;
+    result << "";
+    return result.str();
+}
+EOSKEL
+
+open("#{class_name}.h", "w").write(hpp_skel)
+open("#{class_name}.cpp", "w").write(cpp_skel)
+
+exit 0

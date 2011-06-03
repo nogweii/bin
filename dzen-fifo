@@ -1,0 +1,18 @@
+#!/bin/sh
+
+# capture the name of the fifo
+fifo_name=$1
+shift
+
+# ensure that the directory containing fifos exist
+if [ ! -d ~/.data/dzen-fifos/ ] ; then
+    mkdir -p ~/.data/dzen-fifos/
+fi
+# and make sure the fifo is there
+if [ ! -e ~/.data/dzen-fifos/$fifo_name ] ; then
+    mkfifo ~/.data/dzen-fifos/$fifo_name
+fi
+
+# and let's run dzen!
+tail -f ~/.data/dzen-fifos/$fifo_name | dzen2 \
+     -fn "xft:Liberation Mono:size=7" $@

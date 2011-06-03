@@ -1,0 +1,8 @@
+#!/bin/sh
+
+if [ -z "$1" ] ; then
+    echo "gigatoggle: Switch between 100 Mbit & 1 Gbit speeds"
+    echo
+    echo "Usage: $(basename $0) DEVICE"
+    echo "example: $(basename $0) eth0"
+fi

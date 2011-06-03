@@ -1,0 +1,23 @@
+#!/bin/sh
+# file: xmonad_keys.sh
+
+# show key bindings for XMonad using dzen2
+
+fgCol=grey80
+bgCol=grey5
+titleCol=DarkOrange3
+keyCol=green2
+
+(
+echo "^fg($titleCol)----------- keys -----------^fg()";
+echo "^fg($titleCol)right click to close^fg()"
+sed -n \
+ -e 's/^.*"\(M-[^"]*\)".*--[ \t]*\(.*\)$/^fg('$keyCol')\1^fg() \2/p' \
+ -e 's/^[ \t]*$//p' \
+ $HOME/.xmonad/lib/XMonad/Config/Evaryont/Keys.hs
+) | cat -s \
+| dzen2 -fg $fgCol -bg $bgCol -x 600 -y 0 -l 30 -ta l -w 500 -p \
+-e 'onstart=togglecollapse,scrollhome;entertitle=uncollapse,grabkeys;\
+enterslave=grabkeys;leaveslave=collapse,ungrabkeys;\
+button2=togglestick;button3=exit:13;button4=scrollup;button5=scrolldown;\
+key_Escape=ungrabkeys,exit;key_Next=scrolldown;key_Prior=scrollup'

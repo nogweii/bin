@@ -1,13 +1,59 @@
-#!/bin/sh
+#!/bin/bash -x
 
 echo "Downloading latest versions of some scripts..."
+# Everything we do is relative to the ~/bin/ directory
+cd ~/bin/
 
+# playing nice with the current state of the git repo...
+git stash save --quiet
+
+# and revert the state to back to where we were before
+trap "git stash pop 'stash@{0}' --quiet" EXIT # we just made stash 0
+
+# Update script function
+updated=()
+# $1 == url for the new script, $2 == path of the script
 dl() {
     echo -n "$2..."
-    wget --quiet $1 -O ~/bin/$2
-    chmod a+x ~/bin/$2
+    # Download the updated version for comparison to the old one..
+    wget --no-check-certificate --quiet $1 -O $2.new
+    # making it executable
+    chmod a+x $2.new
+    # Check if the script is updated, ignoring diff's output. Save a list for
+    # later use in the commit message. (We rely on the return value.)
+    if ! diff -q $2 $2.new >/dev/null 2>/dev/null ; then
+        updated=(${updated[@]} $2)
+        mv $2.new $2
+        echo "${updated[@]}"
+    else
+        rm $2.new
+    fi
     echo "done!"
 }
+
+# Let's use the function above to update our scripts
+dl "https://github.com/defunkt/gist/raw/master/gist" "gist"
 dl "http://git.kitenet.net/?p=mpdtoys.git;a=blob_plain;f=mpfade;hb=HEAD" "mpfade"
 dl "http://betterthangrep.com/ack-standalone" "ack"
 dl "http://defunkt.github.com/hub/standalone" "hub"
+
+if [ ${#updated} -lt 1 ] ; then
+    exit 0
+    # no need to go further than this point if there were no updates.
+fi
+
+# Building the commit message
+commit_message="updated scripts:"
+for script in $updated ; do
+    commit_message="$commit_message $script," # n.b. Trailing comma
+done
+# Strip the last character from the commit message, which is the trailing comma
+commit_message=${commit_message:0:((${#commit_message}-1))}
+
+# And now commit the changes (using the above message) to the git repo
+for script in $updated ; do
+    git add $script
+done
+# commit the changes...
+#git commit --message="Called $(basename $0), $commit_message" >/dev/null 2>&1
+echo "$commit_message, committed to the repository."

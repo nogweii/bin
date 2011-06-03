@@ -1,0 +1,9 @@
+#!/bin/sh
+
+if $(cat /proc/asound/card0/codec\#0 | egrep 'HP$' >/dev/null) ; then
+    # headphone plugged in
+    echo "yay headphones!"
+else
+    # headphone not plugged in
+    echo "awesome speakers, bro!"
+fi

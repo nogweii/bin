@@ -1,0 +1,7 @@
+#!/bin/sh
+cards=$()
+len=$(echo "Card Name | ID" | wc -m)
+echo "  Name | ID"
+echo "-------+---"
+aplay -l | grep card | sed -r 's@card ([0-9]): (\w+) .*@\2 \1@' | sort -u \
+    | column -t | sed -r 's@  ([0-9])@ | \1@'

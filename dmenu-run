@@ -1,9 +1,16 @@
 #!/bin/sh
 
+if [ -d "$HOME/bin" ] ; then
+   export PATH="$HOME/bin:$PATH"
+fi
+
+args="-i -f"
+# TODO: font & colors. From xrdb?
 if [ -x /usr/bin/yeganesh ] ; then
-   dbin='yeganesh -p dmenu_run --'
+   dbin='yeganesh'
+   args="-f -p dmenu_run -- $args"
 else
    dbin='dmenu'
 fi
 
-exe=`dmenu_path | $dbin -fn '-misc-terminus-r-*-*-*-*-*-*-*-*-*-u' ${1+"$@"}` && exec $exe
+exe=`dmenu_path | /usr/bin/$dbin $args $@` && exec $exe

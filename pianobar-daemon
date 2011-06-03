@@ -1,0 +1,41 @@
+#!/usr/bin/ruby
+
+# read pianobar configuration for user email
+config = File.readlines("#{ENV['XDG_CONFIG_HOME']}/pianobar/config")
+begin
+  email = config.grep(/^\s*user/).first.split("=")[1].strip
+rescue
+  warn "Email needs to be configured in your pianobar configuration."
+  exit 1
+end
+
+# pass along the email to gnome-keyring
+password = `gnome-keyring-query get "pandora://#{email}/"`
+if password.empty?
+  warn "No password, can't log in. Good bye"
+  exit 1
+end
+
+$stop = false
+trap('INT') do
+  $stop = true
+end
+
+# since we're done with user-interactive stuff, we're going into the background.
+Process.daemon
+
+# and let's start pianobar!
+require 'open3'
+Open3.popen3("pianobar") { |stdin, stdout, stderr, wait_thr|
+  pid = wait_thr.pid
+  # stick the pid in a file, for later use by whomever.
+  File.open("#{ENV['XDG_CONFIG_HOME']}/pianobar/pid", "w").write(pid)
+  # send the password, along with an enter
+  stdin.puts password
+  stdin.close
+  # wait for pianobar to finish (or we're told to stop)
+  while wait_thr.alive? or $stop
+  end
+  wait_thr.kill
+  exit 0
+}

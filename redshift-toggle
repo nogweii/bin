@@ -1,0 +1,16 @@
+#!/bin/sh
+# Change monitor gamma over time, to avoid blue in my eyes @ night.
+# latitude (DC) == 39.2:-77.2
+# latitude (Tempe) == 33.4:111.93
+#LOCATION="39.2:-77.2"  # DC
+LOCATION="33.4:111.93"  # Tempe
+
+pgrep redshift &>/dev/null
+if [ $? -lt 1 ] ; then
+  echo "redshift: killing"
+  killall redshift
+  exit $?
+else
+  echo "redshift: starting"
+  exec redshift -l $LOCATION -m vidmode -t 6000:3500
+fi

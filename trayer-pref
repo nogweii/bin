@@ -1,0 +1,1 @@
+exec trayer --widthtype request --align right --height 32 --tint 0x000000 --transparent true --SetDockType true --SetPartialStrut true --edge top

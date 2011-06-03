@@ -1,0 +1,4 @@
+#!/bin/dash
+
+# simple script which will open the browser to point to UAT's intranet page
+open-browser "https://intranet.known-universe.com/student/default.asp"

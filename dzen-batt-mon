@@ -11,7 +11,7 @@ GFG='#999' # color of the gauge
 GH=12      # height of the gauge
 GBG='#333' # color of gauge background
 X=1547     # x position
-Y=0        # y position
+Y=0      # y position
 FN='"xft:Liberation Mono:size=7"' # font
 
 STATEFILE='/proc/acpi/battery/BAT0/state' # battery's state file
@@ -28,6 +28,15 @@ ICON_PATH="$HOME/.data/icons/dzen"
 # Today's date & current time
 DATE_FORMAT="%d %b %Y %H.%M"
 
+gdbar="$([ -x /opt/dzen/bin/gdbar ] && echo '/opt/dzen/bin/gdbar' || echo 'gdbar')"
+
+# whether or not to do a notification
+doNotify=0
+
+notify() {
+    notify-send --urgency=$1 --icon=$2 "Battery" "$3"
+}
+
 while true; do
     # look up battery's data
     BAT_FULL=`cat $INFOFILE|grep design|line|cut -d " " -f 11`;
@@ -42,12 +51,28 @@ while true; do
     if [ $RPERC -gt $MIDBAT ]; then GFGC=$GFG; fi
     if [ $RPERC -le $MIDBAT ]; then GFGC=$MIDCOL; fi
     if [ $RPERC -le $LOWBAT ]; then GFGC=$LOWCOL; fi
+
+    case $RPERC in
+        $LOWBAT)
+            message="Battery getting low, better plug in..."
+            level="normal"
+            icon="/usr/share/icons/gnome/32x32/status/battery-low.png"
+            notify $level $icon "$message"
+        ;;
+        15)
+            message="Battery dangerously low! Plug in AC!"
+            level="critical"
+            icon="/usr/share/icons/gnome/32x32/status/battery-caution.png"
+            notify $level $icon "$message"
+        ;;
+    esac
+
     echo -n $(date +"$DATE_FORMAT")
     if [ "$STATUS" = " on-line" ] ; then
         echo -n " ^i(${ICON_PATH}/ac_01.xbm)"
     else
         echo -n " ^i(${ICON_PATH}/battery.xbm)"
     fi
-    eval echo $RPERC | gdbar -h $GH -w $GW -fg $GFGC -bg $GBG
+    eval echo $RPERC | $gdbar -h $GH -w $GW -fg $GFGC -bg $GBG
     sleep $TIME_INT;
 done | dzen2 -ta c -tw $W -y $Y -x $X -fg "$FG" -bg "$BG" -fn "$FN" -h 18

@@ -1,0 +1,43 @@
+#!/usr/bin/ruby
+
+BINARY = File.basename $0
+if ARGV[0].nil? or ARGV[0] == "--help"
+    puts "#{BINARY}: DNS & Whois lookup tool"
+    puts "Usage: #{BINARY} <domain-or-ip>"
+    puts <<-EOHELP
+
+Will return wether or not a domain is available.  If it's not, it'll return
+the contact information for the domain, as well as the DNS information
+associated with the domain (such as the IP it points to.)
+EOHELP
+    exit 0
+end
+
+begin
+    require 'net/dns'
+    require 'whois'
+rescue LoadError
+    puts "#{BINARY} needs the net-dns & whois gems. Install them via rubygems:"
+    puts "\tgem install net-dns whois"
+    exit 1
+end
+
+target = ARGV[0]
+record = Whois::whois(target)
+
+if record.available? and !record.registered?
+    puts "#{target} is available."
+    exit 0
+end
+
+puts "Contact Information:"
+for contact in record.contacts
+    puts contact.type
+    puts contact.name + "<#{contact.email}>"
+    puts contact.address
+    puts "#{contact.city}, #{contact.state}, #{contact.country} #{contact.zip}"
+    puts contact.phone
+end
+
+nameserver = record.nameservers.first
+puts nameserver.name

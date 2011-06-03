@@ -1,0 +1,4 @@
+#!/usr/bin/ruby
+
+events = ARGV[0]
+events.gsub(/[\n\r]/, '<br />')

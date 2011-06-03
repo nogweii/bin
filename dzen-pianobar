@@ -1,0 +1,7 @@
+#!/bin/sh
+NEXT_SONG="echo -n 'n' > $HOME/.config/pianobar/ctl"
+LOVE_SONG="echo -n '+' > $HOME/.config/pianobar/ctl"
+TOGGLE_PLAY="echo -n 'p' > $HOME/.config/pianobar/ctl"
+
+dzen-fifo pianobar -bg "#333" -fg "#fff" -x 1050 -h 18 -y 0 -w 300 -ta r
+#-ta l -e "button1=exec:'$LOVE_SONG';button2=exec:'$TOGGLE_PLAY';button3=exec:'$NEXT_SONG'"

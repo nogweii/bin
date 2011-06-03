@@ -12,12 +12,12 @@ FG='#ccc'
 BG='#222'
 BBG='#333' # Bar Background
 BFG=green  # Bar Foreground
-X=1365
+X=1350
 Y=0
 WIDTH=200
 FN='xft:Liberation Mono:size=7' # font
 
-while :; do
+while true ; do
 
   # network interface, so says wicd
   INTERFACE="$(dbus-send --system --print-reply --dest=org.wicd.daemon \
