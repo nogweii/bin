@@ -34,7 +34,6 @@ dl() {
 # Let's use the function above to update our scripts
 dl "https://github.com/defunkt/gist/raw/master/gist" "gist"
 dl "http://git.kitenet.net/?p=mpdtoys.git;a=blob_plain;f=mpfade;hb=HEAD" "mpfade"
-dl "http://betterthangrep.com/ack-standalone" "ack"
 dl "http://defunkt.github.com/hub/standalone" "hub"
 
 if [ ${#updated} -lt 1 ] ; then
