@@ -1,0 +1,153 @@
+#!/usr/bin/ruby
+
+# This is an awesome script. Just one step closer to typing english in the shell
+# and the shell actually understanding it!
+
+$verbose = ARGV.delete "-v"
+VERSION='0.5'
+terms = {}
+
+terms[:decade] = proc do
+    value = Time.now.year+1
+    while value.to_i > Time.now.year
+        century = %w{18 19 20}.sample
+        # rand(n) means 0..n, exclusive (will never return n)
+        decade = rand(10)
+        value = "#{century}#{decade}0's"
+    end
+    value
+end
+
+terms[:month] = proc do
+    require 'date'
+    Date::MONTHNAMES.sample
+end
+
+terms[:day] = proc do
+    require 'date'
+    Date::DAYNAMES.sample
+end
+
+begin # NicePassword gem
+    require 'nice_password'
+    terms[:password] = proc do
+        begin
+            settings = {}
+            settings[:length] = %w[10 11 12 13 14 15 16 17 18].sample
+            settings[:words] = %w[2 3 4].sample
+            settings[:digits] = %w[2 3 4 5 6].sample
+            NicePassword.new(settings)
+        rescue NicePassword::FormatError
+            # Keep trying until we don't get an error. :-P
+            retry
+        end
+    end
+rescue LoadError
+    warn "missing gem: nice_password" if $verbose
+end
+
+begin # RandomData gem
+    require 'random_data'
+    terms[:name] = proc do
+        Random.full_name
+    end
+
+    terms[:boy] = proc do
+        Random.firstname_male
+    end
+
+    terms[:girl] = proc do
+        Random.firstname_female
+    end
+
+    terms[:phone] = proc do
+        Random.boolean ? Random.phone : Random.international_phone
+    end
+
+    terms[:email] = proc do
+        Random.email
+    end
+
+    terms[:state] = proc do
+        Random.state_full
+    end
+
+    terms[:country] = proc do
+        Random.country
+    end
+
+    terms[:city] = proc do
+        Random.city
+    end
+
+    terms[:address] = proc do
+        Random.address_line_1
+    end
+rescue LoadError
+    warn "missing gem: random_data" if $verbose
+end
+
+begin # Can-Has-Lolcat
+    require 'can-has-lolcat'
+    terms[:lolcat] = proc do
+        Lolcat.can_haz(:url)
+    end
+rescue LoadError
+    warn "missing gem: can-has-lolcat" if $verbose
+end
+
+begin # Webster
+    require 'webster'
+    terms[:word] = proc do
+        Webster.new.random_word
+    end
+rescue LoadError
+    warn "missing gem: webster" if $verbose
+end
+
+terms[:insult] = proc do
+    dictionary = %w(airheaded anarchistic anorexic anusim anusvara ape arrogant
+            assface asshole assman barforific bastaard bastard bastardly bedamn
+            bimbo bitch bitchwad bombastic bony bovine brain-dead bum-licking
+            bumwipe butt-licking butt-ugly cerebral cerebrally-challenged
+            chicken-brained chubby clitoria clitoris clitorism conceited
+            coprophagiac corpulent cow-like crud-infested damnable damnably
+            damnation damnatory damned damner damnify damnii damning damningly
+            damnonii damnous damnously dense dick dickhead dickwad dildo
+            dillweed dingus dinkum douche bag dumbshit egotistical emaciated
+            fart-sniffing fascist fat fat-ass floozy four-eyed frotterist full
+            o'yourself grandiose hag hemipenis hog-humping idiotic indecisive
+            jerk-off lame loser mirror-obsessed money-grubbing moronic nipple
+            nit-witted obese obtuse pea-brained pecker pencil-necked penis
+            penistone pork-bellied portly prick pseudo-genius
+            psuedo-intellectual pudgy puke-inducing pukebreath pukestick puny
+            pus-lipped pus-sucking pussy rectum rectum-head rectum-sniffing
+            rotund schmuck scrawny-assed scuz-bag self-absorbed shita shitepoke
+            shittah shittim shother shrew slut smegging smeghead smelly-crotched
+            sperm-bank swordick tart tramp turd-like twit ugolicious undamn
+            undamned undamning up-chuck-inspiring vacillating vacuous vagina
+            vaginal vaginant vaginate vaginated vain vermin-ridden vomit-face
+            vomitrocious  weiner wench whore whoredom whorelike whoreship
+            whoreson whorish whorishly witless zit-faced)
+    puts "apologies in advance... :-)" if $verbose
+    "#{dictionary.sample} #{dictionary.sample}"
+end
+
+terms["-h".to_sym] = proc do
+    puts "random#{$verbose ? " v#{VERSION}":''}: English in the command line."
+    puts "Usage: random [#{terms.keys.join('|')}|-v]"
+    exit 0
+end
+
+terms["--help".to_sym] = proc do
+    terms["-h".to_sym].call
+end
+
+if ARGV[0].nil?
+    puts rand
+elsif terms.include? ARGV[0].to_sym
+    puts terms[ARGV[0].to_sym].call
+else
+    warn "Unknown randomization term."
+    exit 1
+end

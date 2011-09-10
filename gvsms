@@ -1,0 +1,23 @@
+#!/bin/sh
+
+# KDialog wrapper for the Google Voice SMS ruby script
+
+# Get the phone number from the user. Also allows the user to cancel.
+number=`kdialog --title "Google Voice SMS" --inputbox "Phone number:"`
+if [[ $number = "" ]] ; then
+    # exit nicely if the user canceled sending a message
+    exit 0
+fi
+
+# Get the SMS. Do or die now.
+sms=`kdialog --title "Google Voice SMS" \
+    --textinputbox "SMS message (limit to 140 characters\!):"`
+if [[ $sms = "" ]] ; then
+    kdialog --error "No SMS message provided! Exiting..."
+    # exit nicely if the user canceled sending a message
+    exit 1
+fi
+
+# Call the ruby script, with a message box reporting the success. (Hopefully.)
+kdialog --title  "Google Voice SMS" \
+        --msgbox "`ruby ~/bin/gvsms.rb -n "${number}" -m "${sms}" 2>&1`"
