@@ -1,7 +1,37 @@
 #!/usr/bin/ruby
 
-# This is an awesome script. Just one step closer to typing english in the shell
+# This is an awesome script. Just one step closer to typing English in the shell
 # and the shell actually understanding it!
+#
+# Usage
+# =====
+#
+# Put this file somewhere in your PATH. Make it executable, and that should be
+# it!
+#
+# To get a list of available sources of data, run `random -h`. You can pass `-v`
+# if you want to increase verbosity.
+#
+# Dependencies
+# ============
+#
+# random doesn't depend on anything explicitly, but can increase in feature set
+# if you have any of the following gems installed:
+#
+#   - nice_password
+#   - random_data
+#   - can-has-lolcat
+#   - webster
+#
+# if you want a reminder that random has extra gems it can use, run it in
+# verbose mode. It will output any gems it can use that can't be loaded.
+#
+# License
+# =======
+#
+# Copyright (C) 2011, Colin 'Evaryont' Shea
+# Released under the MIT license.
+# Find it at http://www.opensource.org/licenses/mit-license.php
 
 $verbose = ARGV.delete "-v"
 VERSION='0.5'
@@ -37,7 +67,8 @@ begin # NicePassword gem
             settings[:words] = %w[2 3 4].sample
             settings[:digits] = %w[2 3 4 5 6].sample
             NicePassword.new(settings)
-        rescue NicePassword::FormatError
+        rescue NicePassword::FormatError => e
+            warn "Retrying password: #{e.message}" if $verbose
             # Keep trying until we don't get an error. :-P
             retry
         end
