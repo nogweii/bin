@@ -3,5 +3,6 @@
 # Simple xrdb script which also defines a lot of symbols for the c-style
 # pre-processor. (cpp)
 
-xrdb -DHOME=$HOME $(echo $(xrdb -symbols | grep -Ev "\"|'")) \
-     -all -load $HOME/.Xdefaults
+xrdb -DHOME=$HOME -DCONFIG=$XDG_CONFIG_HOME -DDATA=$XDG_DATA_HOME \
+    $(echo $(xrdb -symbols | grep -Ev "\"|'")) \
+    -all -merge $XDG_CONFIG_HOME/X11/Xdefaults
