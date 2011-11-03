@@ -1,0 +1,609 @@
+#!/usr/bin/python2
+# parse the Hacker Key (hackerkey.com) v4
+import re, sys
+# I bet there's a bug with + and / on ChoicesWithOther
+# Originally by Kragen Javier Sitaker (kragen at pobox.com), from
+# http://lists.canonical.org/pipermail/kragen-hacks/2008-July/000494.html
+
+nogui_hacker_key = """
+v4sw7RYUhw6ln5pr9Ock6ma7u9Lw2XGm1l7De6t6SWb7OHDen7g7aNs6MSp-8/-3
+"""
+
+width = 80
+
+def wrap(hanging, text, width):
+    "Word wrap with a possible hanging indent."
+    lines = [hanging]
+    indent = ' ' * len(hanging)
+    for word in text.split(' '):
+        if len(lines[-1]) + len(word) > width:
+            lines[-1] = lines[-1].rstrip()
+            lines.append(indent)
+        lines[-1] += word + ' '
+    return lines
+
+class Category:
+    def print_banner(self, category, rest, indent):
+        for line in wrap(indent,
+                         '%s: (%s%s)' % (self.name, category, rest),
+                         width):
+            print line
+        return '    ' + indent
+    def present_val(self, prefix, char, val):
+        for line in wrap("%s%s - " % (prefix, char), val, width):
+            print line
+    def parse(self, tail):
+        groups = re.match('(?s)([-A-Z0-9/!+.]*)(.*)', tail)
+        return groups.groups()
+
+
+class Version(Category):
+    def explain(self, category, rest, indent):
+        print "Version %s (%s%s)" % (rest, category, rest)
+
+class NotKnown(Category):
+    def explain(self, category, rest, indent):
+        if rest: print "%snot understood: %s%s" % (indent, category, rest)
+
+class Choices(Category):
+    def __init__(self, name, choices, next = NotKnown()):
+        self.name, self.choices, self.next = name, choices.copy(), next
+        for char, desc in [
+            ('!', 'I staunchly refuse to participate in the category.'),
+            ('$', 'I do this for a living.'),
+            ('?', "I don't know anything about this category.")]:
+            # setdefault to deal with '$': "I'm a prostitute.",
+            self.choices.setdefault(char, desc)
+    def __repr__(self):
+        return '%s(%r, %r, %r)' % (self.__class__.__name__,
+                                   self.name,
+                                   self.choices,
+                                   self.next)
+    def present(self, prefix, char):
+        self.present_val(prefix, char, self.choices[char])
+    def explain_item(self, item, indent):
+        if item in self.choices:
+            self.present(indent, item)
+        elif len(item) == 3:        # x+y or x/y
+            from_, mid, to_ = item
+            fromterms = {'+': 'Currently:        ', '/': 'Ranging from:'}
+            toterms   = {'+': 'Striving to reach:', '/': 'to:          '}
+            self.present("%s%s " % (indent, fromterms[mid]), from_)
+            self.present("%s%s " % (indent, toterms[mid]), to_)
+        elif len(item) == 2 and item[1] == '/':
+            self.present_val(indent, item[0], self.choices[item[0]] +
+                             ' (Said trait is not very rigid, may change '
+                             'with time or with individual interaction)')
+        else:
+            return False
+        return True
+    def parse_items(self, string):
+        return re.findall('.(?:[/+].?)?', string)
+    def explain(self, category, rest, indent):
+        items = self.parse_items(rest)
+        if items: indent = self.print_banner(category, rest, indent)
+        uncomprehended = []
+        for item in items:
+            if not self.explain_item(item, indent):
+                uncomprehended.append(item)
+        self.next.explain(category, ''.join(uncomprehended), indent)
+    def renamed(self, newname):
+        return self.__class__(newname, self.choices, self.next)
+
+class ChoicesWithOther(Choices):
+    """
+    Two categories have an 'Other' option that breaks the simple regex parser.
+
+    This option uses 'O' and runs until a '/'. But 'pr', 'g', 'b',
+    and 'u' have 'O' options that are just single letters. That's why
+    the parsing belongs to particular classes, and this is the one
+    that does it differently.
+
+    """
+    def parse(self, tail):
+        groups = re.match('(?s)((?:O[-A-Za-z0-9/!+.]*/|[-A-NP-Z0-9/!+.])*)(.*)',
+                          tail)
+        return groups.groups()
+    def parse_items(self, string):
+        return re.findall('O[-A-Za-z0-9/!+.]*/|[-A-NP-Z0-9/!+.]', string)
+    def explain_item(self, item, indent):
+        if item.startswith('O'):
+            self.present_val(indent, 'O', 'Other: ' + item[1:-1])
+            return True
+        else:
+            return Choices.explain_item(self, item, indent)
+
+class Age(Category):
+    name = "Age"
+    choices = {
+        '[0-9][0-9]': 'Actual Age',
+        '[0-9]X': 'I only feel like updating my age once per decade!',
+        'F': '100+ (Old Fart)',
+        'I': 'Immortal',
+        'N': 'N/A, or None of your business',
+    }
+    def explain(self, category, rest, indent):
+        indent = self.print_banner(category, rest, indent)
+        for k, v in self.choices.items():
+            if re.match(k + '$', rest):
+                self.present_val(indent, rest, v)
+                break
+        else:
+            NotKnown()(category, rest, indent)
+
+class Politics(Category):
+    """
+    Renders the Politics category.
+
+    For version 4, use the ratings from the Political Compass
+    (www.politicalcompass.org) website. Just list your "Economic
+    Left/Right" and "Social Libertarian/Authoritarian" scores with a slash
+    between them, or round up/down to the nearest whole number to save space
+    (preferred). Yes, the (-) symbol is not valid PGP, but at least the
+    category is now somewhat useful.
+
+    If you only list one number in this category it will be assumed to be
+    the Social Libertarian/Authoritarian rating, as social issues tend to be
+    more important to hackers
+    """
+    name = 'Politics (www.politicalcompass.org)'
+    url = "http://www.politicalcompass.org/facebook/pcgraphpng.php?ec=%s&soc=%s"
+    def explain(self, category, rest, indent):
+        if rest in '?!':
+            return Choices(self.name, {}).explain(category, rest, indent)
+
+        indent = self.print_banner(category, rest, indent)
+
+        if '/' in rest:
+            economic, social = rest.split('/', 1)
+        else:
+            economic, social = None, rest
+        print "%sSocial Libertarian/Authoritarian: %s" % (indent, social)
+        if economic is not None:
+            print "%sEconomic Left/Right: %s" % (indent, economic)
+            sys.stdout.write(indent)
+            print self.url % (economic, social)
+        else:
+            sys.stdout.write(indent)
+            print self.url % (0, social)
+
+decoders = {
+    'v': Version(),
+    'sw': Choices('Software Hacking', {
+        '9': "I'm Bill Joy, Eric Raymond or JWZ.",
+        '8': "I am an uberhacker; I wrote my shell/debugger/editor/compiler in "
+             "30 lines of code. Other people use and love my hacks.",
+        '7': "Live to Hack, Hack to Live!",
+        '6': "There is nothing better than an elegant hack.",
+        '5': "Average, I've made a few software hacks in my day.",
+        '4': "I've hacked code once or twice, software isn't my thing.",
+        '3': "I don't hack software at all. I'm a structured programmer!",
+        '2': "I'm not even a programmer, much less a hacker!",
+        '1': "I'm a manager and/or work at IBM.",
+    }, Choices('Favored languages', {
+        'C': "C(++)",
+        'B': "(Visual) Basic",
+        'L': "Lisp",
+        'H': "PHP",
+        'P': "Perl",
+        'J': "Java",
+        'G': "Prolog",
+        'R': "Ruby",
+        'Y': "Python",
+        'U': "Unix Shell",
+        'A': "Ada",
+        'S': "Assembler",
+        'M': "Scheme",
+        'F': "Fortran",
+    })),
+    'hw': Choices('Hardware Hacking', {
+        '9': "I am Steve Wozniak.",
+        '8': "I have my own eeprom burner in the basement. I won't use what I "
+             "didn't make myself.",
+        '7': "I have had my hardware designs used in actual products.",
+        '6': "I've toyed with a few hardware drawings, but never made my own "
+             "hardware. I know PC hardware like the back of my hand.",
+        '5': "I built every PC in my home from the ground up. Newegg knows me "
+             "by my first name.",
+        '4': "I've built a PC or two in my day. It's just easier to get them"
+             " pre-made.",
+        '3': "People ask me what USB stands for, I know a thing or two about"
+             " hardware.",
+        '2': "I know how to put my computer together without a diagram.",
+        '1': "Dude! You got a Dell!",
+    }),
+    'ln': Choices('Language Hacking', {
+        '9': "I am J.R.R. Tolkien.",
+        '8': "I've had my pet language used and studied by others.",
+        '7': "People who don't know me have used words I've coined. I've "
+             "written my own artificial language.",
+        '6': "I am known for certain words or phrases, my friends use my "
+             "linguistic creations regularly.",
+        '5': "I've coined a phrase or made up a new word or two.",
+        '4': "I'm a grammar nazi; people hate to talk to me because I correct "
+             "them mid-sentence.",
+        '3': "I hate people who don't follow the basic rules of $LANG, which I "
+             "strive to speak properly.",
+        '2': "I'm illiterate and/or can only speak IM: l8r sk8r!",
+        '1': "I am a Slashdot editor.",
+    }),
+    'pr': Choices(
+        "Programming - Hey, some hackers think they're programmers ;-)", {
+            '9': "I only program in ADA, and LOVE IT!",
+            '8': "I'm currently programming my IDE-brain connectivity link.",
+            '7': "I do a lot of programming, and spend a lot of time in my "
+                 "IDE of choice.",
+            '6': "I'm definitely a programmer, not a hacker. I like it "
+                 "basic, a text editor and a compiler/debugger.",
+            '5': "I'm your average programmer, I prefer to think I'm a hacker",
+            '4': "I will sacrifice elegant design for performance or size",
+            '3': "Comments are for sissies! If it was hard to write, it "
+                 "should be hard to read.",
+            '2': "I can write hello world, but my programs don't do that much.",
+            '1': "I can't program at all. ",
+        },
+        Choices('Programming methodology', {
+            'O': "Object Oriented",
+            'S': "Structured",
+            'A': "Aspect Oriented",
+            'U': "Unified",
+            'R': "Rational Unified",
+            'P': "Procedural",
+            'F': "Functional",
+        })
+    ),
+    'ck': Choices('Cracking (The malicious act of hacking into systems '
+                  'that gets all the headlines; what non-technical people '
+                  "consider 'hacking')", {
+        '9': "I work for @Stake or write for 2600.",
+        '8': "I write the 'sploits that all the kiddies use. I would be a "
+             "professional black hat except for this economy.",
+        '7': "Black Hat - Cracking is old hat to me. I only compromise a "
+             "system if it looks like a challenge. Script kiddies worship me.",
+        '6': "Grey Hat - Some of my cracking is for good, some is for "
+             "evil. It really depends on who benefits from what I do.",
+        '5': "I try to break into systems occasionally. It's for educational "
+             "purposes, that's it!",
+        '4': "White Hat - I study exploits because I'm the one who has to "
+             "patch the systems when they get released. I subscribe to CERT.",
+        '3': "I've tried once or twice, but it felt wrong. I stick to warez.",
+        '2': "I don't ever try to break into a computer, that's against the"
+              " law!",
+        '1': "I barely know how to crack an egg!",
+    }),
+    'ma': Choices('Mathematics (highest completed Math course)', {
+        '9': "Advanced Calc/Theory",
+        '8': "Differential Equations",
+        '7': "Calc II",
+        '6': "Probability/Statistics",
+        '5': "Linear Algebra",
+        '4': "Calc I",
+        '3': "I finished HS Math and realized that was enough for me",
+        '2': "Still in secondary school/high school & doing just fine.",
+        '1': "I'm angry at numbers. There's like, too many of 'em and stuff.",
+    }),
+    'u': Choices('Unix', {
+        '9': "I am Ken Thompson.",
+        '8': "I am a guru. Everyone asks me for help with their Unix "
+             "machines. Unix is more than an OS, it's my religion!",
+        '7': "I use exclusively Unix on all my computers. If it's not Unix, "
+             "it's CRAP!",
+        '6': "I really like Unix; I've installed Linux once or twice but "
+             "primarily use Windows or MacOS for my daily needs.",
+        '5': "Unix is okay, it's just a tool like any other.",
+        '4': "Mac OS X is as close to Unix as I like to get.",
+        '3': "I dislike Unix, it's too cryptic, and what's this shell crap! "
+             "The GUI is far superior!",
+        '2': "Unix is an abomination. It's one of those dead OSes that "
+             "doesn't realize it's dead yet.",
+        '1': "I am Bill Gates.",
+    }, Choices("Most (least) favorite *nix OSes", {
+        'L': "Linux",
+        'I': "Irix",
+        'A': "AIX",
+        'S': "(Open)Solaris",
+        'F': "FreeBSD",
+        'N': "NetBSD",
+        'O': "OpenBSD",
+        'B': "Other BSD",
+        'H': "HP-UX",
+        'M': "MacOS X / Darwin",
+        'T': "Tru64",
+    })),
+    'w': Choices('Windows', {
+        '9': "I work for Microsoft, they call me code monkey....well "
+             "just monkey.",
+        '8': "I install every beta build of the newest Windows release "
+             "I can get off the 'net. I want to work at Microsoft.",
+        '7': "I've developed my own Windows programs, VB and .NET 0wn me.",
+        '6': "I really like Windows; I have my desktop theme and screensaver "
+             "just they way I want them.",
+        '5': "Windows is OK, I'm pretty indifferent about it.",
+        '4': "When are they going to stop stealing other people's ideas "
+             "and come up with something INNOVATIVE? I still run it though, "
+             "what else is there?",
+        '3': "I keep Windows on my hard drive only to test new hardware I "
+             "buy. Linux rulez!",
+        '2': "I have totally annihilated Windows off my hard and haven't "
+             "looked back!",
+        '1': "I've never actually run Windows, I am completely untainted!",
+    }, Choices('Favorite Windows OS(es)', {
+        'D': "MS-DOS/Windows 3.x",
+        'N': "Windows NT",
+        'T': "Windows 2000",
+        'W': "Win95/98/Me",
+        'C': "Windows CE/Mobile",
+        'X': "Windows XP",
+        'U': "Windows Server 2003",
+        'V': "Vista",
+        'G': "I use Windows machines but only with Cygwin installed",
+    })),
+    'm': Choices("MacOS X", {
+        '9': "I am Steve Jobs.",
+        '8': "I've written books about programming with Cocoa and Carbon. "
+             "See you at the WWDC!",
+        '7': "I love it! The power of Unix and a slick aqua GUI are the "
+             "height of computing. I've written the occasional app or two.",
+        '6': "I like the new MacOS. Finally stability AND ease of use!",
+        '5': "MacOS X is okay. A nice GUI front-end for a Unix OS.",
+        '4': "I don't like it. There's not enough emphasis on the CLI.",
+        '3': "I hate it. The GUI takes up half my RAM and it still locks up on"
+             " me even though it's UNIX based!",
+        '2': 'I despise MacOS X. I miss "Classic" MacOS (<= 9).',
+        '1': "I despise MacOS X. I miss the Apple ][.",
+    }),
+    'l': Choices("Linux", {
+        '9': "I am Linus Torvalds or Alan Cox.",
+        '8': "I am an active kernel hacker/package maintainer. If Linux didn't"
+             " exist, I might have to leave my house once in a while!",
+        '7': "I'm a power user. I've developed my own mini-distribution on a "
+             "whim. I can't count how many kernels I've compiled.",
+        '6': "I really like Linux. I've tried a few distributions and am"
+             " almost decided on one. Windows sucks.",
+        '5': "Linux is okay.",
+        '4': "I don't like Linux. It still relies too much on the command"
+              " line.",
+        '3': "I hate Linux. It's not really UNIX, it's a cheap knock off. His "
+             "whole open sores thing will never work!",
+        '2': "I despise Linux and its commie supporters. Thank God there's a "
+             "great company like Microsoft around and a great OS like Windows!",
+        '1': "I work for SCO.",
+    }, ChoicesWithOther('Favorite distribution', {
+        'A': "Damn Small",
+        'D': "Debian",
+        'E': "(Open)SuSE",
+        'F': "Fedora Core",
+        'G': "Gentoo",
+        'I': "(Lin|Free)spire",
+        'K': "Knoppix (et al)",
+        'L': "Linux From Scratch",
+        'M': "Mandriva",
+        'P': "Puppy",
+        'R': "Red Hat",
+        'S': "Slackware",
+        'U': "Ubuntu (et al)",
+        'V': "Vector",
+    })
+    ),
+    'i': ChoicesWithOther("IDE/Text Editor environment", {
+        '9': "Xcode",
+        'A': "Anjuta",
+        'N': "Notepad (sick)",
+        '8': "Visual Studio",
+        'C': "Eclipse",
+        'P': "Powerbuilder",
+        '7': "CodeWarrior",
+        'D': "Delphi",
+        'T': "Textpad",
+        '6': "emacs",
+        'E': "ee",
+        '5': "pico/nano",
+        'F': "(v)FTE",
+        '4': "jove",
+        'G': "GNUstep",
+        '3': "jed",
+        'H': "HTE",
+        '2': "vi (and clones)",
+        'I': "NEdit",
+        '1': "ed",
+        'J': "jEdit",
+        '0': "cat",
+        'L': "Idle",
+    }),
+    'e': Choices("Education (highest level)", {
+        '9': "I'm omniscient, you insensitive clod!",
+        '8': "PhD.",
+        '7': "Master's Degree.",
+        '6': "Bachelor's Degree.",
+        '5': "Trade/Technical school/Associates",
+        '4': "Some college",
+        '3': "High school diploma.",
+        '2': "Currently in secondary school.",
+        '1': "Elementary/Middle school.",
+        '0': "We don't need no education.",
+    }),
+    't': Choices("Television (most hackers don't watch much)", {
+        '9': "I'm Max Headroom.",
+        '8': "I've long since given up other things like a job, talking to "
+             "other people and leaving my house. I have an IV and dialysis so I"
+             " don't have to worry about pesky bodily functions.",
+        '7': "I watch TV religiously. The television is never shut off on my"
+             " house. I have a generator so I can watch TV even when there's a"
+             "power outage!",
+        '6': "I watch a lot of TV. I have a TiVo just so I can get every show "
+             "of my favorite series!",
+        '5': "I watch TV a few hours a day, and have a few favorite shows.",
+        '4': "I watch TV once in awhile. There's just not much good on"
+             "anymore.",
+        '3': "TV is trash. I'd rather read a book or go for a walk.",
+        '2': "TV is just the (Devil|Government|Big Business)'s tool of control!"
+             " Throw out your TV!",
+        '1': "I'm Amish",
+    }, Choices("Hacker TV Series", {
+        'T': "Star Trek",
+        'N': "TNG",
+        'D': "DS9",
+        'V': "Voyager",
+        'E': "Enterprise",
+        'B': "Babylon 5",
+        'S': "Stargate SG1/Atlantis",
+        'H': "Xena/Hercules",
+        'L': "LEXXX",
+        'F': "Farscape",
+        'R': "Red Dwarf",
+        'X': "The X Files",
+        'M': "Monty Python",
+        'A': "Adult Swim",
+        'G': "Battlestar Galactica",
+        'W': "Doctor Who",
+    })),
+    'b': Choices('Books', {
+        '9': "I'm obsessed with reading. I actually write my own "
+             "short stories/poetry as well as reading books.",
+        '8': "I'm kind of a bookworm, I try to read a book a week/month.",
+        '7': "I read actual books, not only technical references.",
+        '6': "I pick up the odd book. I know my way around the local Borders.",
+        '5': "I read books occasionally. You mean besides O'Reilly books? "
+             "Oh, then no.",
+        '4': "I don't read books, the web is enough of a reading outlet for"
+             "me.",
+        '3': "I haven't read a book since college.",
+        '2': "I haven't read a book since high school.",
+        '1': "I'm illiterate (See ln1).",
+    }, Choices('Hacker Favorite Books and Authors', {
+        'A': "Isaac Asimov",
+        'D': "The New Hacker's Dictionary",
+        'G': "William Gibson",
+        'H': "Hitchhiker's Guide",
+        'I': "Illuminatus Trilogy",
+        'L': "C. S. Lewis",
+        'K': "Philip K. Dick",
+        'M': "Man/texinfo pages",
+        'O': "O'Reilly technical books",
+        'P': "Harry Potter series",
+        'R': "Request for Comments (RFCs)",
+        'S': "Neil Stephenson",
+        'T': "J R R Tolkien",
+    })),
+    'en': Choices('Encryption', {
+        '9': "I have my own encryption algorithm named after me.",
+        '8': "I can crack Enigma in my head.",
+        '7': "I use GnuPG for all email and have many cryptographic "
+             "filesystems on my hard drive. If you want my data you're "
+             "going to have to earn it!",
+        '6': "I use encryption frequently. Want to sign my key?",
+        '5': "I like and use encryption.",
+        '4': "I don't use encryption. I have nothing to hide.",
+        '3': "Encryption is needless overhead. If you use it, you must have "
+             "something to hide!",
+        '2': "Only terrorists use encryption. The government should have back "
+             "doors to all encryption mechanisms.",
+        '1': "Only the government should be able to use encryption to be able "
+             "to keep its secrets safe!",
+    }),
+    'g': Choices("Gaming", {
+        '9': "I am John Carmack.",
+        '8': "I've developed the occasional game. People consider me to be a "
+             "gaming guru. People disconnect from servers when they see me "
+             "log on.",
+        '7': "I play all the time, when I'm not hacking, eating or sleeping.",
+        '6': "I play often, I have a console or two and/or quite a few PC "
+             "games.",
+        '5': "I'll pick up the occasional game.",
+        '4': "I used to play video games back in the 8-bit days, but not "
+             "anymore.",
+        '3': "I don't like video games, that's time I could be hacking.",
+        '2': "I don't like video games, that's time I could be sleeping.",
+        '1': "I suck at video games.",
+    }, Choices('Genre Categories', {
+        'R': "Graphical RPG",
+        'A': "Action/Adventure",
+        'S': "Sports",
+        'Z': "Puzzle",
+        'T': "Text Based/MUD",
+        'O': "Shooter",
+        'V': "Massively Multiplayer games (how do you find time to hack??)",
+        'G': "Realtime Strategy",
+    }, # XXX this nesting is suboptimal
+    Choices('Console Categories', {
+        'C': '"Classic" (i.e. dead) systems - Nintendo [S]NES, Sega',
+        'M': "Modern systems (PS2/3, XBOX (360), GameCube/Wii).",
+        'H': "Handhelds (Gameboy/PSP)",
+        'P': "PC Gamer",
+    }))),
+    'a': Age(),
+    's': Choices('Sex', {
+        '9': "I'm Jenna Jameson.",
+        '8': "I'm a nympho. If I don't have sex every 6 hours I get totally"
+             " antsy.",
+        '7': "I've had more than my share of sex. I'm a stud!",
+        '6': "I've had sex more than a few times. Still out there in the dating"
+             " scene so let's not get into numbers.",
+        '5': "I've had sex. Next subject.",
+        '4': "I haven't had sex, not that I haven't had the opportunity but I'm"
+             " saving myself.",
+        '3': "I haven't even gotten past second base. Once my face clears up "
+             "I'm gonna get some though!",
+        '2': "Sex is dirty! Save it for someone you love!",
+        '1': "I'm a member of the clergy. None for me, thanks.",
+        '0': "I'm a eunuch.",
+        '$': "I'm a prostitute.",
+
+        'M': "Male",
+        'F': "Female",
+
+        'G': "Gay/Lesbian",
+        'B': "BiSexual",
+
+        'S': "Single",
+        'R': "Married",
+        'I': "Involved (dating)",
+
+        'T': "Transvestite",
+        'D': "BDSM",
+
+        'W': "Swinger",
+    }),
+    'r': Choices("Religion", {
+        '9': "I Am God, you foolish mortal!",
+        '8': "Pantheist - The Universe IS God.",
+        '7': "Pagan/Wiccan - I worship nature moreso than a deity.",
+        '6': "Polytheist - I believe in multiple Gods.",
+        '5': "Monotheist - There is only one God who exists.",
+        '4': "Theist - God exists and interacts with the world and His/Her/Its "
+             "followers.",
+        '3': "Deist - God exists, but does not intervene in the world.",
+        '2': "Agnostic - Unsure of God's existence.",
+        '1': "Atheist - There is no God.",
+    }),
+    'p': Politics(),
+}
+
+decoders['g/l'] = decoders['l'].renamed('GNU/Linux')
+
+def parse(key):
+    while True:
+        tail = re.search('(?s)([a-z/]+)(.*)', key)
+        if not tail: break
+        category = tail.group(1)
+        decoder = decoders.get(category, NotKnown())
+        rest, key = decoder.parse(tail.group(2))
+        decoder.explain(category, rest, '')
+
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        for key in sys.argv[1:]:
+            parse(key)
+    else:
+        print "testing 2: NoGUI:"
+        parse(nogui_hacker_key)
+        print
+        #print "Done with Kragen's key; showing others"
+        #parse("v4l7OgNewSense/s7")
+        #parse("v4g/lOgNewSense/s6")
+        #parse("v4p-4.20/-5.10r3")
+        #parse("p-4/-5")
+        #parse("p6.10")
+        #parse("p6")
+        #parse("u5/")
