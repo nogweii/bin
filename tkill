@@ -1,0 +1,15 @@
+#!/bin/sh
+
+pid=$1
+retval=0
+scriptname="$(basename $0)"
+
+for signal in "TERM" "INT" "HUP" "KILL"; do
+    kill -$signal $pid >/dev/null
+    retval=$?
+    [ $retval -eq 0 ] && break
+    echo "$scriptname: $signal did not kill $pid" >&2
+    sleep 1
+done
+
+exit $retval
