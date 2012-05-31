@@ -1,0 +1,118 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Audio::MPD q{0.19.0};
+
+=head1 NAME
+
+mpfade - fade mpd volume in or out
+
+=head1 SYNOPSIS
+
+mpfade [minutes] [max|min] [host]
+
+=head1 DESCRIPTION
+
+B<mpfade> behaves differently depending on whether mpd is playing or not.
+
+If mpd is not playing (or is paused), it starts it playing at a low volume,
+and gradually cranks the volume up to the specified B<max> value (default
+50) over the specified number of minutes (default 10).
+
+If mpd is already playing, it works in reverse, reducing the volume over
+time until it's a the specified B<min> (defaults to a tenth of what it was
+at the start). Then it stops playing.
+
+B<mpfade> tries to interact well with manual volume changes you make. If
+the volume is fading up, and you change the volume manually, it stops. This
+is intended to be useful when used as an alarm clock. If the volume is
+fading down, changes you make to the volume will be noticed, and the fade
+down will continue from that point.
+
+The B<minutes> value can be a floating point value. If the hostname is
+omitted, the MPD_HOST environment variable will be used.
+
+=head1 AUTHOR
+
+Copyright 2007 Joey Hess <joey@kitenet.net>
+
+Licensed under the GNU GPL version 2 or higher.
+
+http://kitenet.net/~joey/code/mpdtoys
+
+=cut
+
+my $seconds=60 * 10;
+if (@ARGV && $ARGV[0] =~ /^[0-9.]+$/) {
+	$seconds=60 * shift;
+}
+my $endpoint;
+if (@ARGV && $ARGV[0] =~ /^[0-9.]+$/) {
+	$endpoint=shift;
+}
+
+if (@ARGV) {
+	$ENV{MPD_HOST}=shift;
+}
+
+my $mpd=Audio::MPD->new(conntype => "reuse");
+my $vol=$mpd->status->volume;
+if ($mpd->status->state eq 'play') {
+	if (defined $endpoint) {
+		if ($endpoint >= $vol) {
+			die "error: min ($endpoint) is not less than current volume ($vol)\n";
+		}
+	}
+	else {
+		$endpoint=int($vol / 10);
+	}
+	print "fading down from $vol to $endpoint over $seconds seconds\n";
+	fade($endpoint, $seconds);
+	$mpd->stop;
+}
+else {
+	if (! defined $endpoint) {
+		$endpoint=50;
+	}
+	$mpd->volume($vol=0);
+	print "fading up from $vol to $endpoint over $seconds seconds\n";
+	$mpd->play;
+	fade($endpoint, $seconds);
+}
+
+sub fade {
+	my $endpoint=shift;
+	my $seconds=shift;
+
+	if ($seconds < 1) {
+		$mpd->volume($endpoint);
+		return;
+	}
+
+	my $span=$endpoint - $vol;
+	my $oldvol=$vol;
+	my $curvol;
+
+	# TODO calculate how long to optimally sleep
+
+	while (sleep 1) {
+		$curvol=$mpd->status->volume;
+		if ($curvol != $oldvol) {
+			if ($span > 0) {
+				print "manual volume change, aborting fade up\n";
+				return;
+			}
+			else {
+				print "manual volume change\n";
+				$vol=$curvol;
+			}
+		}
+
+		$vol=$vol + ($span / $seconds);
+		last if abs($vol - $endpoint) <= 1;
+		if (abs(int($vol - $oldvol)) > 1) {
+			$mpd->volume(int($vol));
+			$oldvol=int($vol);
+		}
+	}
+}
