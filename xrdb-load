@@ -3,6 +3,11 @@
 # Simple xrdb script which also defines a lot of symbols for the c-style
 # pre-processor. (cpp)
 
-xrdb -DHOME=$HOME -DCONFIG=$XDG_CONFIG_HOME -DDATA=$XDG_DATA_HOME \
-    $(echo $(xrdb -symbols | grep -Ev "\"|'")) \
+if [ -x /usr/bin/zurl ]; then
+    zurl_define="-DZURL_FOUND=1"
+else
+    zurl_define="-DZURL_FOUND=0"
+fi
+
+xrdb $zurl_define -DHOME=$HOME -DCONFIG=$XDG_CONFIG_HOME -DDATA=$XDG_DATA_HOME \
     -all -merge $XDG_CONFIG_HOME/X11/Xdefaults
