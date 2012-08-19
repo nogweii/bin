@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 
 echo "Downloading latest versions of some scripts..."
 # Everything we do is relative to the ~/bin/ directory
