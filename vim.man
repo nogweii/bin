@@ -2,7 +2,7 @@
 
 cmd="col -b -x | vim -c \":set ft=man nospell buftype=nofile bufhidden=hide\" -c \":setlocal noswapfile\" -"
 
-if [ "$1" ] ; then
+if [ -r "$1" ] ; then
     eval "cat '${1}' | $cmd"
 fi
 
